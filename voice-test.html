@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语音通话诊断工具</title>
+<style>
+  /* ===== CSS 变量 ===== */
+  :root {
+    --bg:            #f5f5f5;
+    --card-bg:       #ffffff;
+    --text:          #333333;
+    --text-secondary:#666666;
+    --border:        #e0e0e0;
+    --green:         #2e7d32;
+    --green-bg:      #e8f5e9;
+    --red:           #c62828;
+    --red-bg:        #fbe9e7;
+    --amber:         #e65100;
+    --amber-bg:      #fff3e0;
+    --gray:          #9e9e9e;
+    --gray-bg:       #fafafa;
+    --primary:       #1565c0;
+    --primary-hover: #0d47a1;
+    --radius:        8px;
+    --shadow:        0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 16px;
+    min-height: 100dvh;
+  }
+
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  /* ===== 标题区 ===== */
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  header .subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+
+  /* ===== 一键检测按钮 ===== */
+  .btn-row {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .btn-primary {
+    display: inline-block;
+    padding: 12px 32px;
+    min-width: 180px;
+    min-height: 44px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-primary:disabled {
+    background: #90caf9;
+    cursor: not-allowed;
+  }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    cursor: default;
+  }
+  .card-header .status-icon {
+    font-size: 1.3rem;
+    width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .card-header .test-name {
+    flex: 1;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .card-header .action-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--primary);
+    background: #e3f2fd;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  .card-header .action-btn:hover { background: #bbdefb; }
+  .card-header .action-btn:disabled {
+    color: var(--gray);
+    background: var(--gray-bg);
+    cursor: not-allowed;
+  }
+
+  .card-body {
+    padding: 0 16px 14px 54px; /* 缩进对齐 status-icon */
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .card-body .detail-line { margin-bottom: 4px; word-break: break-all; }
+  .card-body .error-msg   { color: var(--red); font-weight: 500; }
+  .card-body .warn-msg   { color: var(--amber); font-weight: 500; }
+  .card-body .success-msg { color: var(--green); font-weight: 500; }
+  .card-body .suggestion  { margin-top: 6px; padding: 8px 10px; border-radius: 4px; font-size: 0.82rem; }
+  .card-body .suggestion.red { background: var(--red-bg); color: var(--red); }
+  .card-body .suggestion.amber { background: var(--amber-bg); color: var(--amber); }
+  .card-body .suggestion.gray { background: var(--gray-bg); color: var(--text-secondary); }
+
+  /* ===== 诊断结论面板 ===== */
+  .conclusion-panel {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-top: 8px;
+  }
+  .conclusion-panel.hidden { display: none; }
+  .conclusion-panel h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .conclusion-item {
+    padding: 10px 12px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .conclusion-item.severe { background: var(--red-bg); border-left: 4px solid var(--red); }
+  .conclusion-item.warn   { background: var(--amber-bg); border-left: 4px solid var(--amber); }
+  .conclusion-item.pass   { background: var(--green-bg); border-left: 4px solid var(--green); }
+  .conclusion-item .conclusion-label {
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  /* ===== 移动端适配 ===== */
+  @media (max-width: 768px) {
+    body { padding: 10px; }
+    header h1 { font-size: 1.25rem; }
+    .card-header { padding: 12px 12px; gap: 8px; }
+    .card-body { padding: 0 12px 12px 44px; }
+    .card-header .action-btn { padding: 8px 12px; font-size: 0.8rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>语音通话诊断工具</h1>
+    <p class="subtitle">7 项检测，找出 Web 语音 API 的阻塞根因</p>
+  </header>
+
+  <!-- 一键检测 -->
+  <div class="btn-row">
+    <button class="btn-primary" id="btnRunAll" onclick="runAllTests()">一键检测</button>
+  </div>
+
+  <!-- 检测项卡片（由 JS 动态渲染） -->
+  <div id="cardsContainer"></div>
+
+  <!-- 诊断结论 -->
+  <div class="conclusion-panel hidden" id="conclusionPanel">
+    <h2>诊断结论</h2>
+    <div id="conclusionContent"></div>
+  </div>
+
+</div>
+
+<script>
+/* ===================================================================
+ * 全局状态
+ * =================================================================== */
+const state = {
+  // 每项状态: 'idle' | 'running' | 'pass' | 'fail' | 'warn' | 'skip'
+  results: {
+    env:      { status: 'idle', details: [], errors: [], suggests: [] },
+    voices:   { status: 'idle', details: [], errors: [], suggests: [], chineseVoices: [] },
+    perm:     { status: 'idle', details: [], errors: [], suggests: [] },
+    record:   { status: 'idle', details: [], errors: [], suggests: [] },
+    speak:    { status: 'idle', details: [], errors: [], suggests: [] },
+    contRec:  { status: 'idle', details: [], errors: [], suggests: [], rounds: [] },
+  },
+  // 语音包缓存
+  voiceList: [],
+};
+
+/* ===================================================================
+ * UI 渲染
+ * =================================================================== */
+
+/** 获取检测项配置（名称与按钮文案） */
+function getTestDefs() {
+  return [
+    { id: 'env',     name: '1. 环境检测',     btnText: '自动',  autoOnly: true },
+    { id: 'voices',  name: '2. 中文语音包',   btnText: '自动',  autoOnly: true },
+    { id: 'perm',    name: '3. 麦克风权限',   btnText: '自动',  autoOnly: true },
+    { id: 'record',  name: '4. 录音测试',     btnText: '开始录音', autoOnly: false },
+    { id: 'speak',   name: '5. 朗读测试',     btnText: '开始朗读', autoOnly: false },
+    { id: 'contRec', name: '6. 连续识别',     btnText: '连续识别', autoOnly: false },
+  ];
+}
+
+/** 根据 status 返回图标和行内样式 */
+function statusIcon(status) {
+  switch (status) {
+    case 'pass':    return '<span style="color:#2e7d32">✅</span>';
+    case 'fail':    return '<span style="color:#c62828">❌</span>';
+    case 'warn':    return '<span style="color:#e65100">⚠</span>';
+    case 'skip':    return '<span style="color:#9e9e9e">⊘</span>';
+    case 'running': return '<span style="color:#1565c0">⏳</span>';
+    default:        return '<span style="color:#9e9e9e">⏳</span>';
+  }
+}
+
+/** 渲染所有卡片 */
+function renderCards() {
+  const container = document.getElementById('cardsContainer');
+  const defs = getTestDefs();
+
+  container.innerHTML = defs.map((d) => {
+    const r = state.results[d.id];
+
+    // 详情行
+    let detailHTML = '';
+    if (r.details.length > 0) {
+      detailHTML += r.details.map((line) => `<div class="detail-line">${esc(line)}</div>`).join('');
+    }
+    // 错误行
+    if (r.errors.length > 0) {
+      detailHTML += r.errors.map((e) => `<div class="detail-line error-msg">⚠ ${esc(e)}</div>`).join('');
+    }
+    // 建议
+    if (r.suggests.length > 0) {
+      const cls = r.status === 'fail' ? 'red' : (r.status === 'warn' ? 'amber' : 'gray');
+      detailHTML += r.suggests.map((s) => `<div class="suggestion ${cls}">💡 ${esc(s)}</div>`).join('');
+    }
+    // 中文语音包列表
+    if (d.id === 'voices' && r.chineseVoices && r.chineseVoices.length > 0) {
+      detailHTML += `<div class="detail-line" style="margin-top:4px;">📋 中文语音包：${r.chineseVoices.map((v) => esc(v.name + ' (' + v.lang + ')')).join('、')}</div>`;
+    }
+    // 连续识别回合
+    if (d.id === 'contRec' && r.rounds && r.rounds.length > 0) {
+      detailHTML += '<div class="detail-line" style="margin-top:4px;">';
+      detailHTML += r.rounds.map((rd, i) => `第${i + 1}轮: ${rd.status === 'pass' ? '✅' : '❌'} ${esc(rd.text || '')}`).join('<br>');
+      detailHTML += '</div>';
+    }
+
+    const btnHTML = d.autoOnly
+      ? `<span class="status-icon">${statusIcon(r.status)}</span>`
+      : `<span class="status-icon">${statusIcon(r.status)}</span>
+         <button class="action-btn" id="btn-${d.id}" onclick="runTest('${d.id}')" ${r.status === 'running' ? 'disabled' : ''}>${d.btnText}</button>`;
+
+    return `<div class="card">
+      <div class="card-header">
+        ${btnHTML}
+        <span class="test-name">${d.name}</span>
+      </div>
+      ${detailHTML ? `<div class="card-body">${detailHTML}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/** HTML 转义 */
+function esc(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** 刷新全部 UI */
+function refreshUI() {
+  renderCards();
+  updateConclusion();
+}
+
+/* ===================================================================
+ * 单项测试入口
+ * =================================================================== */
+function runTest(id) {
+  switch (id) {
+    case 'env':    runEnvTest(); break;
+    case 'voices': runVoicesTest(); break;
+    case 'perm':   runPermTest(); break;
+    case 'record': runRecordTest(); break;
+    case 'speak':  runSpeakTest(); break;
+    case 'contRec':runContRecTest(); break;
+  }
+}
+
+/* ===================================================================
+ * 一键检测：自动跑 1-3，引导用户手动触发 4-6
+ * =================================================================== */
+async function runAllTests() {
+  const btn = document.getElementById('btnRunAll');
+  btn.disabled = true;
+  btn.textContent = '检测中...';
+
+  // 重置所有状态
+  for (const key of Object.keys(state.results)) {
+    if (key === 'contRec') {
+      state.results.contRec = { status: 'idle', details: [], errors: [], suggests: [], rounds: [] };
+    } else {
+      state.results[key] = { status: 'idle', details: [], errors: [], suggests: [] };
+      if (key === 'voices') state.results.voices.chineseVoices = [];
+    }
+  }
+  refreshUI();
+
+  // 自动运行 1-3
+  runEnvTest();
+  await sleep(100);
+  runVoicesTest();
+  await sleep(100);
+  runPermTest();
+
+  // 等待语音包加载（最多 3 秒），然后更新 UI
+  await sleep(3200);
+  refreshUI();
+
+  // 标记 4-6 为等待用户操作
+  ['record', 'speak', 'contRec'].forEach((id) => {
+    if (state.results[id].status === 'idle') {
+      state.results[id].details = ['等待手动触发'];
+    }
+  });
+  refreshUI();
+
+  btn.disabled = false;
+  btn.textContent = '一键检测';
+}
+
+/* ===================================================================
+ * 1. 环境检测
+ * =================================================================== */
+function runEnvTest() {
+  const r = state.results.env;
+  r.status = 'running'; refreshUI();
+
+  let passed = true;
+  r.details = []; r.errors = []; r.suggests = [];
+
+  // 检测协议
+  const proto = location.protocol;
+  const host = location.hostname;
+  const isSecure = proto === 'https:' || host === 'localhost' || host === '127.0.0.1';
+  r.details.push(`当前协议：${proto}，主机：${host}`);
+  if (!isSecure) {
+    r.errors.push('当前页面非 HTTPS 且非 localhost，Web Speech API 需要安全上下文');
+    r.suggests.push('请通过 HTTPS 或 localhost 访问此页面');
+    passed = false;
+  }
+
+  // 检测 SpeechRecognition（含 webkit 前缀）
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    r.details.push(`SpeechRecognition：可用（使用 ${window.SpeechRecognition ? '标准 API' : 'webkit 前缀'}）`);
+  } else {
+    r.errors.push('SpeechRecognition API 不可用（当前浏览器不支持语音识别）');
+    r.suggests.push('请使用 Chrome、Edge 或 Safari 打开此页面');
+    passed = false;
+  }
+
+  // 检测 speechSynthesis
+  if (window.speechSynthesis) {
+    r.details.push('speechSynthesis：可用');
+  } else {
+    r.errors.push('speechSynthesis API 不可用');
+    r.suggests.push('当前浏览器不支持语音合成，请使用 Chrome、Edge 或 Safari');
+    passed = false;
+  }
+
+  r.status = passed ? 'pass' : 'fail';
+  refreshUI();
+}
+
+/* ===================================================================
+ * 2. 中文语音包检测
+ * =================================================================== */
+function runVoicesTest() {
+  const r = state.results.voices;
+  r.status = 'running'; r.details = []; r.errors = []; r.suggests = []; r.chineseVoices = [];
+  refreshUI();
+
+  const synth = window.speechSynthesis;
+  if (!synth) {
+    r.status = 'fail';
+    r.errors.push('speechSynthesis 不可用，无法检测语音包');
+    refreshUI();
+    return;
+  }
+
+  // 首次调用 getVoices() 可能返回空数组，需要监听 voiceschanged
+  let resolved = false;
+
+  function checkVoices() {
+    if (resolved) return;
+    resolved = true;
+    state.voiceList = synth.getVoices();
+
+    // 过滤 zh 语系的 voice
+    const zhVoices = state.voiceList.filter((v) => v.lang.toLowerCase().startsWith('zh'));
+    r.chineseVoices = zhVoices.map((v) => ({ name: v.name, lang: v.lang }));
+    r.details.push(`总共 ${state.voiceList.length} 个语音包，中文 ${zhVoices.length} 个`);
+
+    if (zhVoices.length === 0) {
+      r.status = 'warn';
+      r.errors.push('未检测到中文语音包');
+      r.suggests.push('系统缺少中文语音包，可能导致朗读时使用非中文语音。可在系统设置中添加中文语言包');
+    } else {
+      r.status = 'pass';
+    }
+    refreshUI();
+  }
+
+  // 监听 voiceschanged 事件
+  synth.addEventListener('voiceschanged', checkVoices, { once: true });
+
+  // 立即尝试一次（部分浏览器在页面加载后 voices 已就绪）
+  const immediate = synth.getVoices();
+  if (immediate.length > 0) {
+    // 如果 already loaded，直接使用
+    synth.removeEventListener('voiceschanged', checkVoices);
+    state.voiceList = immediate;
+    const zhVoices = state.voiceList.filter((v) => v.lang.toLowerCase().startsWith('zh'));
+    r.chineseVoices = zhVoices.map((v) => ({ name: v.name, lang: v.lang }));
+    r.details.push(`总共 ${state.voiceList.length} 个语音包，中文 ${zhVoices.length} 个`);
+    if (zhVoices.length === 0) {
+      r.status = 'warn';
+      r.errors.push('未检测到中文语音包');
+      r.suggests.push('系统缺少中文语音包，可能导致朗读时使用非中文语音。可在系统设置中添加中文语言包');
+    } else {
+      r.status = 'pass';
+    }
+    resolved = true;
+    refreshUI();
+  } else {
+    // 3 秒超时兜底
+    setTimeout(() => {
+      if (!resolved) {
+        synth.removeEventListener('voiceschanged', checkVoices);
+        resolved = true;
+        state.voiceList = synth.getVoices();
+        const zhVoices = state.voiceList.filter((v) => v.lang.toLowerCase().startsWith('zh'));
+        r.chineseVoices = zhVoices.map((v) => ({ name: v.name, lang: v.lang }));
+        if (zhVoices.length === 0) {
+          r.status = 'warn';
+          r.errors.push('语音包加载超时或无中文语音包');
+          r.suggests.push('语音包加载超时（3秒）。请检查系统语音设置');
+        } else {
+          r.status = 'pass';
+          r.details.push(`总共 ${state.voiceList.length} 个语音包，中文 ${zhVoices.length} 个（超时兜底）`);
+        }
+        refreshUI();
+      }
+    }, 3000);
+  }
+}
+
+/* ===================================================================
+ * 3. 麦克风权限
+ * =================================================================== */
+async function runPermTest() {
+  const r = state.results.perm;
+  r.status = 'running'; r.details = []; r.errors = []; r.suggests = [];
+  refreshUI();
+
+  // Firefox 不支持 navigator.permissions.query 查询 microphone
+  // 用 try/catch 兼容
+  if (!navigator.permissions || typeof navigator.permissions.query !== 'function') {
+    r.status = 'skip';
+    r.details.push('当前浏览器不支持 permissions API（可能为 Firefox 或旧版浏览器）');
+    r.details.push('权限状态无法提前获知，将在录音测试中体现');
+    refreshUI();
+    return;
+  }
+
+  try {
+    const result = await navigator.permissions.query({ name: 'microphone' });
+    r.details.push(`权限状态：${result.state}`);
+    if (result.state === 'granted') {
+      r.status = 'pass';
+    } else if (result.state === 'prompt') {
+      r.status = 'warn';
+      r.details.push('麦克风权限尚未请求，录音时会弹出授权提示');
+    } else if (result.state === 'denied') {
+      r.status = 'fail';
+      r.errors.push('麦克风权限已被拒绝');
+      r.suggests.push('请在浏览器地址栏左侧点击🔒图标，将麦克风权限改为"允许"后刷新页面');
+    }
+
+    // 监听权限变更
+    result.addEventListener('change', () => {
+      r.details.push(`权限状态变更为：${result.state}`);
+      refreshUI();
+    });
+  } catch (err) {
+    // Firefox 等浏览器可能抛出 TypeError
+    r.status = 'skip';
+    r.details.push(`权限查询异常：${err.message}`);
+    r.details.push('当前浏览器不支持 microphone 权限查询，将在录音测试中体现');
+    r.suggests.push('使用 Chrome/Edge 可获得完整的权限诊断信息');
+  }
+  refreshUI();
+}
+
+/* ===================================================================
+ * 4. 录音测试（必须在用户点击事件中调用）
+ * =================================================================== */
+function runRecordTest() {
+  const r = state.results.record;
+  r.status = 'running'; r.details = []; r.errors = []; r.suggests = [];
+  r.details.push('请在 2 秒内用中文说一句话...');
+  refreshUI();
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    r.status = 'fail';
+    r.errors.push('SpeechRecognition API 不可用');
+    r.suggests.push('请使用 Chrome、Edge 或 Safari 打开此页面');
+    refreshUI();
+    return;
+  }
+
+  let resolved = false;
+  const recognition = new SR();
+  recognition.lang = 'zh-CN';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  function resolve(status, detail, error, suggest) {
+    if (resolved) return;
+    resolved = true;
+    try { recognition.abort(); } catch (_) { /* 忽略 abort 错误 */ }
+    r.details = r.details.filter((d) => d !== '请在 2 秒内用中文说一句话...');
+    if (detail) r.details.push(detail);
+    if (error) r.errors.push(error);
+    if (suggest) r.suggests.push(suggest);
+    r.status = status;
+    refreshUI();
+  }
+
+  // 2 秒无结果超时 → 可能没说话
+  const timeoutId = setTimeout(() => {
+    resolve('fail', '超时：2 秒内未检测到语音输入', 'no-speech：未收到语音', '请检查麦克风是否正常工作，说话时音量是否足够');
+  }, 2000);
+
+  recognition.onresult = (event) => {
+    clearTimeout(timeoutId);
+    const transcript = event.results[0][0].transcript;
+    const confidence = event.results[0][0].confidence;
+    resolve('pass', `识别结果："${transcript}"（置信度：${(confidence * 100).toFixed(0)}%）`);
+  };
+
+  recognition.onerror = (event) => {
+    clearTimeout(timeoutId);
+    // 区分不同错误类型
+    const errMap = {
+      'not-allowed':        { msg: '权限被拒绝 (not-allowed)',       suggest: '请在浏览器地址栏左侧点击🔒图标，将麦克风权限设为"允许"后重试' },
+      'service-not-allowed':{ msg: '服务未授权 (service-not-allowed)', suggest: '当前浏览器/页面无权使用语音识别服务。请检查是否通过 HTTPS 访问' },
+      'audio-capture':      { msg: '无法捕获音频 (audio-capture)',    suggest: '未检测到麦克风设备，或麦克风被其他应用占用。请检查麦克风连接' },
+      'network':            { msg: '网络错误 (network)',              suggest: '语音识别需要联网。请检查网络连接后重试' },
+      'no-speech':          { msg: '未检测到语音 (no-speech)',       suggest: '请确认麦克风正常工作，并在点击按钮后立即说话' },
+      'aborted':            { msg: '识别被中止 (aborted)',            suggest: '' },
+      'bad-grammar':        { msg: '语法错误 (bad-grammar)',          suggest: '语音识别配置异常，请刷新页面重试' },
+      'language-not-supported': { msg: '语言不支持 (language-not-supported)', suggest: '当前浏览器不支持 zh-CN 语音识别' },
+    };
+    const info = errMap[event.error] || { msg: `未知错误：${event.error}`, suggest: '请刷新页面后重试，或检查浏览器控制台' };
+    resolve('fail', null, info.msg, info.suggest || null);
+  };
+
+  recognition.onend = () => {
+    // 如果此时还没 resolved → 没有 result 也没有 error 就结束了
+    if (!resolved) {
+      clearTimeout(timeoutId);
+      resolve('warn', null, '识别意外结束，未返回结果', '可能被浏览器安全策略中断，请重试');
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    resolve('fail', null, `启动失败：${err.message}`, '这是一个 Unexpected Error，请检查浏览器控制台');
+  }
+}
+
+/* ===================================================================
+ * 5. 朗读测试（必须在用户点击事件中调用）
+ * =================================================================== */
+function runSpeakTest() {
+  const r = state.results.speak;
+  r.status = 'running'; r.details = []; r.errors = []; r.suggests = [];
+  r.details.push('正在朗读...');
+  refreshUI();
+
+  if (!window.speechSynthesis) {
+    r.status = 'fail';
+    r.errors.push('speechSynthesis API 不可用');
+    r.suggests.push('当前浏览器不支持语音合成，请使用 Chrome、Edge 或 Safari');
+    refreshUI();
+    return;
+  }
+
+  let resolved = false;
+  const synth = window.speechSynthesis;
+
+  // 先 cancel 清理队列（避免之前的发言阻塞）
+  synth.cancel();
+
+  const utterance = new SpeechSynthesisUtterance('语音播报测试成功');
+  utterance.lang = 'zh-CN';
+  // 如果有中文 voice，优先使用
+  const zhVoice = state.voiceList.find((v) => v.lang.toLowerCase().startsWith('zh'));
+  if (zhVoice) utterance.voice = zhVoice;
+
+  function resolve(status, detail, error, suggest) {
+    if (resolved) return;
+    resolved = true;
+    r.details = r.details.filter((d) => d !== '正在朗读...');
+    if (detail) r.details.push(detail);
+    if (error) r.errors.push(error);
+    if (suggest) r.suggests.push(suggest);
+    r.status = status;
+    refreshUI();
+  }
+
+  let startFired = false;
+
+  utterance.onstart = () => {
+    startFired = true;
+    r.details = r.details.filter((d) => d !== '正在朗读...');
+    r.details.push('朗读已开始...');
+    refreshUI();
+  };
+
+  utterance.onend = () => {
+    if (!startFired) {
+      // onend 先于 onstart 触发 → 异常
+      resolve('fail', null, '朗读结束但 onstart 未触发（可能被 Autoplay Policy 阻塞）', 'Chrome 的 Autoplay Policy 可能阻止了语音合成。请确保在用户点击事件中调用（当前已在点击事件中），或检查系统音频设备');
+    } else {
+      resolve('pass', '朗读完成，听到"语音播报测试成功"');
+    }
+  };
+
+  utterance.onerror = (event) => {
+    // 如果 onend 先触发 then onerror → 忽略
+    if (resolved) return;
+    let msg = event.error || '未知错误';
+    let suggest = '';
+    if (msg === 'interrupted' && !startFired) {
+      msg = 'Autoplay Policy 阻塞 (interrupted)';
+      suggest = '浏览器 Autoplay Policy 阻止了语音合成。请确认在用户点击事件中调用（当前已满足），尝试刷新页面重试';
+    } else if (msg === 'not-allowed') {
+      suggest = '浏览器音频策略拒绝语音合成，请确保页面通过 HTTPS 访问并有用户交互';
+    }
+    resolve('fail', null, msg, suggest);
+  };
+
+  // 2 秒超时：如果 onstart 未触发且有 onerror → 被 Autoplay Policy 阻塞
+  setTimeout(() => {
+    if (!startFired && !resolved) {
+      resolve('fail', null, '朗读未开始（2 秒超时）', '很可能被 Chrome Autoplay Policy 阻塞。请检查：1) 页面是否通过 HTTPS 访问 2) 是否在用户点击后直接调用 3) 浏览器音频设置');
+    }
+  }, 2000);
+
+  try {
+    synth.speak(utterance);
+  } catch (err) {
+    resolve('fail', null, `speak() 调用失败：${err.message}`, '请检查浏览器控制台');
+  }
+}
+
+/* ===================================================================
+ * 6. 连续识别测试（必须在用户点击事件中调用）
+ * =================================================================== */
+async function runContRecTest() {
+  const r = state.results.contRec;
+  r.status = 'running'; r.details = []; r.errors = []; r.suggests = []; r.rounds = [];
+  r.details.push('将连续进行 3 轮识别，每轮请说一句话...');
+  refreshUI();
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    r.status = 'fail';
+    r.errors.push('SpeechRecognition API 不可用');
+    r.suggests.push('请使用 Chrome、Edge 或 Safari 打开此页面');
+    refreshUI();
+    return;
+  }
+
+  let passCount = 0;
+  let failCount = 0;
+  const totalRounds = 3;
+
+  /** 执行单轮识别 */
+  function doRound(roundIndex) {
+    return new Promise((resolveRound) => {
+      const recognition = new SR();
+      recognition.lang = 'zh-CN';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      let settled = false;
+
+      function settle(status, text) {
+        if (settled) return;
+        settled = true;
+        try { recognition.abort(); } catch (_) { /* ignore */ }
+        r.rounds.push({ status, text });
+        if (status === 'pass') passCount++; else failCount++;
+        refreshUI();
+        resolveRound();
+      }
+
+      // 超时
+      const timeoutId = setTimeout(() => {
+        settle('fail', '超时');
+      }, 2000);
+
+      recognition.onresult = (event) => {
+        clearTimeout(timeoutId);
+        const transcript = event.results[0][0].transcript;
+        settle('pass', transcript);
+      };
+
+      recognition.onerror = (event) => {
+        clearTimeout(timeoutId);
+        settle('fail', event.error);
+      };
+
+      recognition.onend = () => {
+        if (!settled) {
+          clearTimeout(timeoutId);
+          settle('fail', '意外结束');
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (err) {
+        clearTimeout(timeoutId);
+        settle('fail', err.message);
+      }
+    });
+  }
+
+  // 逐轮执行
+  for (let i = 0; i < totalRounds; i++) {
+    r.details = [`第 ${i + 1}/${totalRounds} 轮识别中...`];
+    refreshUI();
+    await doRound(i);
+    if (i < totalRounds - 1) {
+      // 每轮之间 300ms 间隔
+      r.details = [`第 ${i + 1} 轮完成，${300}ms 后进行第 ${i + 2} 轮...`];
+      refreshUI();
+      await sleep(300);
+    }
+  }
+
+  r.details = [`连续 ${totalRounds} 轮完成，成功 ${passCount} 次，失败 ${failCount} 次`];
+  r.status = failCount === 0 ? 'pass' : (passCount > 0 ? 'warn' : 'fail');
+
+  if (failCount > 0) {
+    r.suggests.push('连续识别失败率较高时，建议检查网络稳定性或麦克风状态');
+  }
+
+  refreshUI();
+}
+
+/* ===================================================================
+ * 7. 诊断结论
+ * =================================================================== */
+function updateConclusion() {
+  const panel = document.getElementById('conclusionPanel');
+  const content = document.getElementById('conclusionContent');
+
+  // 收集所有已完成项（非 idle）
+  const items = [];
+  const tests = getTestDefs();
+  tests.forEach((t) => {
+    const r = state.results[t.id];
+    if (r.status !== 'idle' && r.status !== 'running') {
+      items.push({ ...r, id: t.id, name: t.name });
+    }
+  });
+
+  if (items.length === 0) {
+    panel.classList.add('hidden');
+    return;
+  }
+
+  // 按优先级排序：权限拒绝 > API 缺失 > 无中文语音包 > Autoplay 阻塞 > 其他
+  const priority = (item) => {
+    const errs = (item.errors || []).join('');
+    if (item.status === 'fail') {
+      if (errs.includes('not-allowed') || errs.includes('denied') || errs.includes('权限被拒绝') || errs.includes('麦克风权限已被拒绝')) return 1;
+      if (errs.includes('API') || errs.includes('不可用') || errs.includes('不支持')) return 2;
+    }
+    if (item.id === 'voices' && item.status === 'warn') return 3;
+    if (errs.includes('Autoplay') || errs.includes('autoplay') || errs.includes('阻塞') || errs.includes('onstart 未触发')) return 4;
+    return 5;
+  };
+
+  items.sort((a, b) => priority(a) - priority(b));
+
+  // 生成结论
+  let html = '';
+  let hasSevere = false;
+
+  items.forEach((item) => {
+    const severity = item.status === 'fail' ? 'severe' : (item.status === 'warn' ? 'warn' : 'pass');
+    if (severity === 'severe' || severity === 'warn') hasSevere = true;
+
+    const allErrors = [...(item.errors || [])];
+    const allSuggests = [...(item.suggests || [])];
+
+    html += `<div class="conclusion-item ${severity}">`;
+    html += `<div class="conclusion-label">${severity === 'severe' ? '🔴' : (severity === 'warn' ? '🟡' : '🟢')} ${item.name}：${item.status === 'pass' ? '通过' : (item.status === 'warn' ? '异常' : '失败')}</div>`;
+    if (allErrors.length > 0) {
+      html += `<div>根因：${allErrors.map(esc).join('；')}</div>`;
+    }
+    if (allSuggests.length > 0) {
+      html += `<div>建议：${allSuggests.map(esc).join('；')}</div>`;
+    }
+    html += '</div>';
+  });
+
+  // 全部通过
+  if (!hasSevere) {
+    html += `<div class="conclusion-item pass">
+      <div class="conclusion-label">🎉 全部检测通过</div>
+      <div>语音通话功能就绪，可以正常使用。</div>
+    </div>`;
+  }
+
+  content.innerHTML = html;
+  panel.classList.remove('hidden');
+}
+
+/* ===================================================================
+ * 工具函数
+ * =================================================================== */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/* ===================================================================
+ * 页面初始化：自动跑环境检测
+ * =================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  // 初始化 UI
+  renderCards();
+
+  // 自动跑 1. 环境检测
+  runEnvTest();
+});
+</script>
+</body>
+</html>
