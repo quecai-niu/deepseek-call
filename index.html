@@ -792,6 +792,9 @@ body {
               // SSE 解析错误 —— 静默跳过
             }
           }
+
+          // 每处理完一批 lines，让出主线程避免卡顿
+          await new Promise(r => setTimeout(r, 0));
         }
 
         // stream 结束时如果没有 [DONE] 标记
@@ -828,6 +831,8 @@ body {
   const ChatUI = {
     _messagesEl: document.getElementById('messages'),
     _emptyStateEl: document.getElementById('emptyState'),
+    _reasoningReady: false,
+    _scrollRafId: null,
 
     /** 清除消息列表 */
     clear() {
@@ -884,7 +889,13 @@ body {
 
       const bubble = document.createElement('div');
       bubble.className = 'msg-bubble';
+      bubble.innerHTML = '<div class="msg-text"></div>';
       row.appendChild(bubble);
+
+      // 新消息重置 reasoning 就绪状态
+      if (role === 'assistant') {
+        this._reasoningReady = false;
+      }
 
       this._messagesEl.appendChild(row);
       this._scrollToBottom();
@@ -892,20 +903,28 @@ body {
       return { rowEl: row, bubbleEl: bubble, reasoningWrapEl: reasoningWrap, reasoningContentEl: reasoningContentEl };
     },
 
-    /** 更新消息文本（流式追加） */
-    updateBubble(bubbleEl, text) {
-      bubbleEl.textContent = text;
+    /** 更新消息文本（增量追加） */
+    updateBubble(bubbleEl, chunk) {
+      const textEl = bubbleEl.querySelector('.msg-text');
+      if (textEl) {
+        // 首次追加内容时清除 typing dots
+        const dots = textEl.querySelector('.typing-dots');
+        if (dots) dots.remove();
+        textEl.appendChild(document.createTextNode(chunk));
+      }
       this._scrollToBottom();
     },
 
-    /** 追加 reasoning 文本 */
+    /** 追加 reasoning 文本（增量追加） */
     appendReasoning(reasoningWrapEl, reasoningContentEl, chunk) {
-      reasoningWrapEl.style.display = 'block';
-      // 默认展开
-      reasoningContentEl.classList.remove('collapsed');
-      const icon = reasoningWrapEl.querySelector('.reasoning-icon');
-      if (icon) icon.classList.add('open');
-      reasoningContentEl.textContent += chunk;
+      if (!this._reasoningReady) {
+        reasoningWrapEl.style.display = 'block';
+        reasoningContentEl.classList.remove('collapsed');
+        const icon = reasoningWrapEl.querySelector('.reasoning-icon');
+        if (icon) icon.classList.add('open');
+        this._reasoningReady = true;
+      }
+      reasoningContentEl.appendChild(document.createTextNode(chunk));
       this._scrollToBottom();
     },
 
@@ -922,10 +941,12 @@ body {
       this._scrollToBottom();
     },
 
-    /** 滚动到底部 */
+    /** 滚动到底部（rAF 去重，避免频繁调用堆积） */
     _scrollToBottom() {
-      requestAnimationFrame(() => {
+      if (this._scrollRafId) return;
+      this._scrollRafId = requestAnimationFrame(() => {
         this._messagesEl.scrollTop = this._messagesEl.scrollHeight;
+        this._scrollRafId = null;
       });
     }
   };
@@ -956,29 +977,41 @@ body {
       let _shouldRestart = false;
       let _restartTimer = null;
       let _restartFailCount = 0;
+      let _processedIndex = 0;
 
       function _createRecognition() {
+        _processedIndex = 0;
         const rec = new SR();
         rec.lang = 'zh-CN';
-        rec.continuous = false;
-        rec.interimResults = false;
+        rec.continuous = true;
+        rec.interimResults = true;
 
         rec.onspeechstart = () => {
           callbacks.onSpeechStart();
         };
 
         rec.onresult = (event) => {
-          const text = (event.results[0][0].transcript || '').trim();
-          // 过滤空/纯标点
-          if (!text || text.length <= 1 || /^[\s\p{P}]+$/u.test(text)) return;
-          callbacks.onResult(text);
+          let newFinal = '';
+          for (let i = _processedIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal && result[0]) {
+              const text = (result[0].transcript || '').trim();
+              if (text && !/^[\s\p{P}]+$/u.test(text)) {
+                newFinal += text;
+              }
+            }
+          }
+          _processedIndex = event.results.length;
+          if (newFinal) {
+            callbacks.onResult(newFinal);
+          }
         };
 
         rec.onend = () => {
           if (_shouldRestart && _state === 'listening') {
             _restartTimer = setTimeout(() => {
               try {
-                _createRecognition();
+                recognition = _createRecognition();
                 recognition.start();
                 _restartFailCount = 0;
               } catch (_) {
@@ -1093,7 +1126,7 @@ body {
         };
         utterance.onend = () => _speakNext();
         utterance.onerror = () => _speakNext(); // 出错跳过当前句
-        speechSynthesis.speak(utterance);
+        try { speechSynthesis.speak(utterance); } catch (_) { /* 不支持则静默 */ }
       }
 
       return {
@@ -1118,7 +1151,7 @@ body {
         },
 
         stop() {
-          speechSynthesis.cancel();
+          try { speechSynthesis.cancel(); } catch (_) { /* 静默 */ }
           _queue = [];
           _buffer = '';
           _speaking = false;
@@ -1151,6 +1184,7 @@ body {
     _currentRequestId: 0,              // 请求 ID（打断时防回调竞态）
     _interruptTimer: null,             // 打断确认定时器
     _voiceAvailable: false,            // 浏览器是否支持语音识别
+    _voiceOutputDisabled: false,       // 浏览器是否不支持语音播报
 
     /* ---- 初始化 ---- */
     init() {
@@ -1361,7 +1395,9 @@ body {
       }
 
       // 用户消息
-      ChatUI.addMessage('user').bubbleEl.textContent = content;
+      const userUI = ChatUI.addMessage('user');
+      const userTextEl = userUI.bubbleEl.querySelector('.msg-text');
+      if (userTextEl) userTextEl.textContent = content;
       this._messages.push({ role: 'user', content: content });
       this._persistMessages();
 
@@ -1405,10 +1441,12 @@ body {
         for (const msg of messages) {
           if (msg.role === 'user') {
             const ui = ChatUI.addMessage('user');
-            ui.bubbleEl.textContent = msg.content || '';
+            const textEl = ui.bubbleEl.querySelector('.msg-text');
+            if (textEl) textEl.textContent = msg.content || '';
           } else if (msg.role === 'assistant') {
             const ui = ChatUI.addMessage('assistant');
-            ui.bubbleEl.textContent = msg.content || '';
+            const textEl = ui.bubbleEl.querySelector('.msg-text');
+            if (textEl) textEl.textContent = msg.content || '';
             if (msg.reasoning_content) {
               ui.reasoningWrapEl.style.display = 'block';
               ui.reasoningContentEl.classList.remove('collapsed');
@@ -1479,11 +1517,11 @@ body {
               if (this._voiceState === 'ai_speaking' || this._voiceState === 'ai_thinking') {
                 // 潜在打断，启动确认定时器
                 this._interruptTimer = setTimeout(() => {
-                  // 500ms 内无有效 onresult，判定为噪声，恢复
+                  // 2000ms 内无有效 onresult，判定为噪声，恢复
                   if (this._voiceState === 'ai_speaking' || this._voiceState === 'ai_thinking') {
                     this._transition('idle');
                   }
-                }, 500);
+                }, 2000);
               } else {
                 this._transition('user_speaking');
               }
@@ -1503,7 +1541,9 @@ body {
               }
 
               // 发送用户语音
-              ChatUI.addMessage('user').bubbleEl.textContent = text;
+              const voiceUserUI = ChatUI.addMessage('user');
+              const voiceTextEl = voiceUserUI.bubbleEl.querySelector('.msg-text');
+              if (voiceTextEl) voiceTextEl.textContent = text;
               this._messages.push({ role: 'user', content: text });
               this._persistMessages();
 
@@ -1523,6 +1563,15 @@ body {
             }
           });
           if (!this._voiceInput) { this._transition('idle'); return; }
+
+          // 检测浏览器是否支持语音播报，不支持则降级为纯文字
+          if (!('speechSynthesis' in window)) {
+            this._voiceOutputDisabled = true;
+            this._showVoiceOutputToast();
+          } else {
+            this._voiceOutputDisabled = false;
+          }
+
           this._voiceOutput = VoiceOutput.create({
             onStart: () => {},
             onEnd: () => {
@@ -1533,9 +1582,11 @@ body {
             }
           });
           // 预热 speechSynthesis，绕过 Chrome autoplay 策略
-          const warmup = new SpeechSynthesisUtterance('');
-          warmup.volume = 0;
-          speechSynthesis.speak(warmup);
+          if (!this._voiceOutputDisabled) {
+            const warmup = new SpeechSynthesisUtterance('');
+            warmup.volume = 0;
+            speechSynthesis.speak(warmup);
+          }
           this._transition('listening');
           break;
 
@@ -1557,7 +1608,8 @@ body {
       const requestId = this._currentRequestId;
 
       const aiUI = ChatUI.addMessage('assistant');
-      aiUI.bubbleEl.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+      const aiTextEl = aiUI.bubbleEl.querySelector('.msg-text');
+      if (aiTextEl) aiTextEl.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
       this._currentAI = aiUI;
       this._currentContent = '';
       this._currentReasoning = '';
@@ -1581,10 +1633,10 @@ body {
           if (requestId !== this._currentRequestId) return;
           if (this._currentAI) {
             this._currentContent += chunk;
-            ChatUI.updateBubble(this._currentAI.bubbleEl, this._currentContent);
+            ChatUI.updateBubble(this._currentAI.bubbleEl, chunk);
           }
           // 语音 TTS
-          if (this._voiceOutput) {
+          if (this._voiceOutput && !this._voiceOutputDisabled) {
             this._voiceOutput.feedChunk(chunk);
             if (this._voiceState === 'ai_thinking') {
               this._transition('ai_speaking');
@@ -1600,11 +1652,17 @@ body {
             this._messages.push(msg);
             this._persistMessages();
           } else if (this._currentReasoning) {
-            if (this._currentAI) this._currentAI.bubbleEl.textContent = '(思考完毕，但未生成回答)';
+            if (this._currentAI) {
+              const doneTextEl = this._currentAI.bubbleEl.querySelector('.msg-text');
+              if (doneTextEl) doneTextEl.textContent = '(思考完毕，但未生成回答)';
+            }
             this._messages.push({ role: 'assistant', content: '', reasoning_content: this._currentReasoning });
             this._persistMessages();
           } else {
-            if (this._currentAI) this._currentAI.bubbleEl.textContent = '(未收到回复)';
+            if (this._currentAI) {
+              const doneTextEl2 = this._currentAI.bubbleEl.querySelector('.msg-text');
+              if (doneTextEl2) doneTextEl2.textContent = '(未收到回复)';
+            }
           }
           this._currentAI = null;
           this._currentContent = '';
@@ -1674,7 +1732,20 @@ body {
       const toast = document.createElement('div');
       toast.id = 'voiceToast';
       toast.className = 'voice-toast';
-      toast.textContent = '您的浏览器不支持语音识别，请使用 Chrome 或 Edge。文字输入仍可使用。';
+      toast.textContent = '当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器';
+      const messagesEl = document.getElementById('messages');
+      messagesEl.insertBefore(toast, messagesEl.firstChild);
+      setTimeout(() => { toast.remove(); }, 4000);
+    },
+
+    /** 语音播报不可用时提示 */
+    _showVoiceOutputToast() {
+      const existing = document.getElementById('voiceToast');
+      if (existing) return;
+      const toast = document.createElement('div');
+      toast.id = 'voiceToast';
+      toast.className = 'voice-toast';
+      toast.textContent = '当前浏览器不支持语音播报，AI 回复将以文字显示';
       const messagesEl = document.getElementById('messages');
       messagesEl.insertBefore(toast, messagesEl.firstChild);
       setTimeout(() => { toast.remove(); }, 4000);
