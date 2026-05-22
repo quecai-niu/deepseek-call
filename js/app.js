@@ -163,9 +163,9 @@ const App = {
       window.open('voice-test.html', '_blank');
     });
 
-    // 综合测试入口
+    // 综合测试入口（不用 window.open，移动端弹窗拦截会导致无反应）
     document.getElementById('btnTest').addEventListener('click', () => {
-      window.open('test.html', '_blank');
+      location.href = 'test.html';
     });
   },
 
