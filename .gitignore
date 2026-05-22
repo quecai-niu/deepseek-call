@@ -15,3 +15,6 @@ desktop.ini
 
 # 交接文档
 handoff-*.md
+
+# 依赖
+node_modules/

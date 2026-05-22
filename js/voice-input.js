@@ -12,7 +12,8 @@ const VoiceInput = {
   /**
    * 创建语音识别实例
    * @param {Object} callbacks - { onSpeechStart, onResult(text), onInterimResult(text), onError(type, msg), onStateChange(state) }
-   * @param {number} [debounceMs=0] - 识别结果累积缓冲时间（毫秒）。>0 时长句分片会在指定时间内合并为一条 onResult
+   * @param {number} [debounceMs=0] - 识别结果累积缓冲时间（毫秒）。>0 时长句分片会在指定时间内合并为一条 onResult。
+   *                                    内置 maxWait = max(debounceMs * 3, 2000)，防止无限缓冲。
    * @returns {Object} { start(), stop(), state }
    */
   create(callbacks, debounceMs) {
@@ -28,6 +29,7 @@ const VoiceInput = {
     let _restartFailCount = 0;
     let _buffer = '';
     let _bufferTimer = null;
+    let _maxWaitTimer = null;
 
     function _createRecognition() {
       const rec = new SR();
@@ -64,9 +66,23 @@ const VoiceInput = {
         if (finalText) {
           if (debounceMs > 0) {
             // 累积缓冲：合并短时间内连续返回的结果，避免长句停顿被拆成多条
+            // maxWaitMs 防止无限等待（3倍 debounce，最低 2 秒）
             _buffer += finalText;
             if (_bufferTimer) clearTimeout(_bufferTimer);
+            if (!_maxWaitTimer) {
+              const maxWait = Math.max(debounceMs * 3, 2000);
+              _maxWaitTimer = setTimeout(() => {
+                _maxWaitTimer = null;
+                if (_bufferTimer) { clearTimeout(_bufferTimer); _bufferTimer = null; }
+                if (_buffer) {
+                  callbacks.onResult(_buffer);
+                  _buffer = '';
+                }
+              }, maxWait);
+            }
             _bufferTimer = setTimeout(() => {
+              _bufferTimer = null;
+              if (_maxWaitTimer) { clearTimeout(_maxWaitTimer); _maxWaitTimer = null; }
               if (_buffer) {
                 callbacks.onResult(_buffer);
                 _buffer = '';
@@ -146,6 +162,7 @@ const VoiceInput = {
         }
         // 停止时刷新缓冲
         if (_bufferTimer) { clearTimeout(_bufferTimer); _bufferTimer = null; }
+        if (_maxWaitTimer) { clearTimeout(_maxWaitTimer); _maxWaitTimer = null; }
         if (_buffer) {
           callbacks.onResult(_buffer);
           _buffer = '';

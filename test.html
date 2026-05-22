@@ -406,6 +406,33 @@
     color: #fff;
     background: var(--primary);
   }
+  /* ===== 自动测试 ===== */
+  .auto-test-panel { margin-top: 8px; }
+  .auto-test-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .auto-test-row select {
+    flex:1; min-width:180px; padding:8px 10px; font-size:0.88rem;
+    border:1px solid var(--border); border-radius:var(--radius); font-family:inherit; outline:none;
+  }
+  .auto-test-row select:focus { border-color:var(--primary); }
+  .auto-test-progress {
+    background:var(--gray-bg); border:1px solid var(--border); border-radius:var(--radius);
+    padding:10px 12px; min-height:36px; font-size:0.85rem;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  .auto-test-progress .step { color:var(--text-secondary); }
+  .auto-test-progress .step.active { color:var(--primary); font-weight:500; }
+  .auto-test-progress .step.done { color:var(--green); }
+  .auto-test-progress .step.fail { color:var(--red); }
+  .auto-test-result {
+    margin-top:8px; padding:10px 12px; border-radius:var(--radius);
+    font-size:0.85rem; line-height:1.6;
+  }
+  .auto-test-result.pass { background:var(--green-bg); color:var(--green); border:1px solid #a5d6a7; }
+  .auto-test-result.fail { background:var(--red-bg); color:var(--red); border:1px solid #ef9a9a; }
+  .auto-test-result.error { background:var(--amber-bg); color:var(--amber); border:1px solid #ffcc80; }
+  .auto-test-result .label { font-weight:500; margin-right:8px; }
+  .auto-test-result .diff { text-decoration:underline; text-decoration-color:var(--red); }
+  .auto-test-detail { font-size:0.82rem; color:var(--text-secondary); margin-top:4px; }
 </style>
 </head>
 <body>
@@ -509,7 +536,38 @@
     </div>
   </div>
 
-  <!-- ===== 3. 操作日志 ===== -->
+  <!-- ===== 3. 自动录音识别测试 ===== -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">&#9889;</span>
+      <span class="title">自动录音识别测试</span>
+      <button class="btn-sm" id="btnAutoTest" onclick="runAutoTest()">运行测试</button>
+      <button class="btn-sm btn-danger" id="btnAutoStop" onclick="stopAutoTest()" disabled>停止</button>
+    </div>
+    <div class="card-body">
+      <div class="auto-test-panel">
+        <div class="auto-test-row">
+          <label for="autoScenario" style="font-weight:500;min-width:60px;">测试场景</label>
+          <select id="autoScenario"></select>
+        </div>
+        <div class="auto-test-progress" id="autoProgress">
+          <span class="step" data-step="ready">就绪</span>
+          <span style="color:var(--text-secondary)">→</span>
+          <span class="step" data-step="loading">加载音频</span>
+          <span style="color:var(--text-secondary)">→</span>
+          <span class="step" data-step="recognizing">识别中</span>
+          <span style="color:var(--text-secondary)">→</span>
+          <span class="step" data-step="comparing">比对</span>
+          <span style="color:var(--text-secondary)">→</span>
+          <span class="step" data-step="done">完成</span>
+        </div>
+        <div class="auto-test-result" id="autoResult" style="display:none;"></div>
+        <div class="auto-test-detail" id="autoDetail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 4. 操作日志 ===== -->
   <div class="card">
     <div class="card-header">
       <span class="icon">&#128196;</span>
@@ -537,6 +595,9 @@ const state = {
   currentUtterance: null,
   currentSpeed: 1.0,
   simMode: false,
+  autoRecognition: null,
+  autoAudio: null,
+  autoRunning: false,
 };
 
 /* ===================================================================
@@ -1120,10 +1181,211 @@ function previewChunks() {
 }
 
 /* ===================================================================
+ * 自动录音识别测试（Chrome 133+：SpeechRecognition.start(audioTrack)）
+ * =================================================================== */
+const TEST_SCENARIOS = [
+  { id: 'test_weather',  label: '天气询问',       file: 'test-audio/test_weather.wav',  expected: '今天天气怎么样', duration: 2 },
+  { id: 'test_poem',     label: '写诗请求',       file: 'test-audio/test_poem.wav',     expected: '帮我写一首关于春天的诗', duration: 3 },
+  { id: 'test_long',     label: '长句（含停顿）', file: 'test-audio/test_long.wav',     expected: '帮我写一首诗，关于春天的，要五言绝句', duration: 4 },
+  { id: 'test_multiple', label: '多句连续',       file: 'test-audio/test_multiple.wav', expected: '你好。今天天气怎么样？帮我写一首诗。', duration: 4 },
+  { id: 'test_math',     label: '数字计算',       file: 'test-audio/test_math.wav',     expected: '一加一等于几', duration: 2 },
+  { id: 'test_code',     label: '写代码请求',     file: 'test-audio/test_code.wav',     expected: '用Python写一个冒泡排序', duration: 3 },
+  { id: 'test_translate',label: '翻译请求',       file: 'test-audio/test_translate.wav',expected: '翻译成英文，今天是个好日子', duration: 3 },
+];
+
+function initAutoTest() {
+  const sel = document.getElementById('autoScenario');
+  TEST_SCENARIOS.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = s.label;
+    sel.appendChild(opt);
+  });
+}
+
+function setAutoStep(stepId) {
+  document.querySelectorAll('#autoProgress .step').forEach(el => {
+    el.classList.toggle('active', el.dataset.step === stepId);
+  });
+}
+
+function markAutoStepDone(stepId) {
+  const el = document.querySelector('#autoProgress .step[data-step="' + stepId + '"]');
+  if (el) { el.classList.remove('active'); el.classList.add('done'); }
+}
+
+function showAutoResult(type, html) {
+  const el = document.getElementById('autoResult');
+  el.style.display = 'block';
+  el.className = 'auto-test-result ' + type;
+  el.innerHTML = html;
+}
+
+function checkAutoTestSupport() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return '浏览器不支持 SpeechRecognition API';
+  if (typeof HTMLAudioElement.prototype.captureStream !== 'function') {
+    return '浏览器不支持 captureStream（需要 Chrome 63+）';
+  }
+  return null;
+}
+
+async function runAutoTest() {
+  const supportErr = checkAutoTestSupport();
+  if (supportErr) {
+    addLog('自动测试不支持: ' + supportErr, 'error');
+    showAutoResult('error', supportErr);
+    return;
+  }
+
+  if (state.autoRunning) return;
+  state.autoRunning = true;
+  document.getElementById('btnAutoTest').disabled = true;
+  document.getElementById('btnAutoStop').disabled = false;
+  document.getElementById('autoResult').style.display = 'none';
+  document.getElementById('autoDetail').textContent = '';
+
+  const scenarioIdx = parseInt(document.getElementById('autoScenario').value);
+  const scenario = TEST_SCENARIOS[scenarioIdx];
+  addLog('自动测试开始: "' + scenario.label + '"', 'info');
+
+  setAutoStep('loading');
+  const audio = new Audio();
+  state.autoAudio = audio;
+  audio.src = scenario.file;
+
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('音频加载超时')), 10000);
+      audio.addEventListener('canplaythrough', () => { clearTimeout(timeout); resolve(); }, { once: true });
+      audio.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('音频加载失败: ' + (audio.error ? audio.error.message : '未知'))); }, { once: true });
+      audio.load();
+    });
+    markAutoStepDone('loading');
+    addLog('音频加载完成: ' + scenario.file, 'success');
+
+    setAutoStep('recognizing');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    state.autoRecognition = recognition;
+    recognition.lang = 'zh-CN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 3;
+
+    const stream = audio.captureStream();
+    const track = stream.getAudioTracks()[0];
+    if (!track) throw new Error('无法获取音频轨道');
+
+    addLog('音频轨道获取成功，启动识别...', 'info');
+
+    const result = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('识别超时 (' + (scenario.duration + 5) + 's)')), (scenario.duration + 5) * 1000);
+      let finalText = '';
+
+      recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalText += event.results[i][0].transcript;
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        clearTimeout(timeout);
+        reject(new Error('识别错误: ' + event.error));
+      };
+
+      recognition.onend = () => {
+        clearTimeout(timeout);
+        if (finalText) {
+          resolve(finalText.trim());
+        } else {
+          reject(new Error('识别结束但无结果'));
+        }
+      };
+
+      try {
+        recognition.start(track);
+      } catch (err) {
+        clearTimeout(timeout);
+        reject(new Error('recognition.start(track) 失败: ' + err.message + '（需要 Chrome 133+）'));
+      }
+
+      audio.play().catch(err => {
+        clearTimeout(timeout);
+        reject(new Error('音频播放失败: ' + err.message));
+      });
+    });
+
+    markAutoStepDone('recognizing');
+    addLog('识别结果: "' + result + '"', 'success');
+
+    setAutoStep('comparing');
+    const expected = scenario.expected;
+    const normalize = (s) => s.replace(/[，。！？、；：""''（）\s]/g, '');
+    const normResult = normalize(result);
+    const normExpected = normalize(expected);
+    const isPass = normResult.includes(normExpected) || normExpected.includes(normResult) ||
+                   normResult === normExpected || normResult.length >= normExpected.length * 0.7;
+
+    markAutoStepDone('comparing');
+    setAutoStep('done');
+    markAutoStepDone('done');
+
+    if (isPass) {
+      showAutoResult('pass',
+        '<span class="label">✓ PASS</span> 识别结果与预期匹配' +
+        '<div style="margin-top:6px;">预期: ' + esc(expected) + '</div>' +
+        '<div>实际: ' + esc(result) + '</div>'
+      );
+      addLog('✓ 测试通过: 预期="' + expected + '" 实际="' + result + '"', 'success');
+    } else {
+      showAutoResult('fail',
+        '<span class="label">✗ FAIL</span> 识别结果不匹配' +
+        '<div style="margin-top:6px;">预期: ' + esc(expected) + '</div>' +
+        '<div>实际: <span class="diff">' + esc(result) + '</span></div>'
+      );
+      addLog('✗ 测试失败: 预期="' + expected + '" 实际="' + result + '"', 'error');
+    }
+
+  } catch (err) {
+    addLog('自动测试异常: ' + err.message, 'error');
+    showAutoResult('error', '<span class="label">⚠ ERROR</span> ' + esc(err.message));
+  } finally {
+    state.autoRunning = false;
+    document.getElementById('btnAutoTest').disabled = false;
+    document.getElementById('btnAutoStop').disabled = true;
+    if (state.autoAudio) {
+      try { state.autoAudio.pause(); state.autoAudio.src = ''; } catch (_) {}
+      state.autoAudio = null;
+    }
+    state.autoRecognition = null;
+  }
+}
+
+function stopAutoTest() {
+  if (state.autoRecognition) {
+    try { state.autoRecognition.abort(); } catch (_) {}
+    state.autoRecognition = null;
+  }
+  if (state.autoAudio) {
+    try { state.autoAudio.pause(); state.autoAudio.src = ''; } catch (_) {}
+    state.autoAudio = null;
+  }
+  state.autoRunning = false;
+  document.getElementById('btnAutoTest').disabled = false;
+  document.getElementById('btnAutoStop').disabled = true;
+  showAutoResult('error', '<span class="label">⏹ 已手动停止</span>');
+  addLog('自动测试已手动停止', 'warn');
+}
+
+/* ===================================================================
  * 页面初始化
  * =================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
   checkEnvironment();
+  initAutoTest();
   addLog('综合测试页面就绪', 'info');
 });
 </script>
