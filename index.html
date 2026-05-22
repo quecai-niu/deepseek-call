@@ -15,6 +15,7 @@
     <button class="toolbar-btn" id="btnClear" title="清空对话">&#128465;</button>
     <button class="toolbar-btn" id="btnCall" title="语音通话">&#128222;</button>
     <button class="toolbar-btn" id="btnDiagnose" title="诊断工具">&#128300;</button>
+    <button class="toolbar-btn" id="btnTest" title="综合测试">🧪</button>
     <button class="toolbar-btn" id="btnSettings" title="设置">&#9881;</button>
   </div>
 </div>
@@ -82,6 +83,24 @@
         <button class="effort-opt" data-effort="medium">Medium</button>
         <button class="effort-opt active" data-effort="high">High</button>
         <button class="effort-opt" data-effort="max">Max</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>联网搜索</label>
+      <div class="toggle-row">
+        <span class="toggle-label">开启后模型可通过 Tavily 搜索互联网获取实时信息</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="webSearchToggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="tavilyKeyGroup" style="display:none; margin-top:8px;">
+        <div class="key-input-row">
+          <input type="password" id="tavilyKeyInput" placeholder="tvly-...">
+          <button class="toggle-vis-btn" id="btnToggleTavilyVis" title="显示/隐藏">&#128065;</button>
+        </div>
+        <div class="hint">需要 Tavily API Key，可在 <a href="https://app.tavily.com" target="_blank" rel="noopener">app.tavily.com</a> 免费获取</div>
       </div>
     </div>
 

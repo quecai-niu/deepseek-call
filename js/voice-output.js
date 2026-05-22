@@ -14,6 +14,19 @@ const VoiceOutput = {
     let _buffer = '';
     let _speaking = false;
 
+    const MAX_CHUNK_LENGTH = 80;
+
+    function _splitLongSentence(sentence, result) {
+      if (sentence.length <= MAX_CHUNK_LENGTH) {
+        result.push(sentence);
+      } else {
+        for (let i = 0; i < sentence.length; i += MAX_CHUNK_LENGTH) {
+          const chunk = sentence.slice(i, i + MAX_CHUNK_LENGTH).trim();
+          if (chunk) result.push(chunk);
+        }
+      }
+    }
+
     /** 句子分隔符：中文标点 + 换行 */
     function _splitSentences(text) {
       const delimRe = /([。！？!?\.\n])/g;
@@ -23,11 +36,11 @@ const VoiceOutput = {
       while ((match = delimRe.exec(text)) !== null) {
         const end = match.index + match[0].length;
         const sentence = text.slice(lastIdx, end).trim();
-        if (sentence && !/^[\s\p{P}]+$/u.test(sentence)) result.push(sentence);
+        if (sentence && !/^[\s\p{P}]+$/u.test(sentence)) _splitLongSentence(sentence, result);
         lastIdx = end;
       }
       const remaining = text.slice(lastIdx).trim();
-      if (remaining && !/^[\s\p{P}]+$/u.test(remaining)) result.push(remaining);
+      if (remaining && !/^[\s\p{P}]+$/u.test(remaining)) _splitLongSentence(remaining, result);
       return result;
     }
 
@@ -40,7 +53,8 @@ const VoiceOutput = {
       const sentence = _queue.shift();
       const utterance = new SpeechSynthesisUtterance(sentence);
       utterance.lang = 'zh-CN';
-      utterance.rate = callbacks.rate || 1.0;
+      // callbacks.getRate 为函数时每次朗读实时读取（支持动态速度调节）
+      utterance.rate = (typeof callbacks.getRate === 'function' ? callbacks.getRate() : callbacks.rate) || 1.0;
       utterance.onstart = () => {
         _speaking = true;
         callbacks.onStart();

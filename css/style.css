@@ -527,3 +527,27 @@ input[type="range"]::-moz-range-thumb {
   .msg-row { max-width: 70%; }
   .settings-panel { max-width: 420px; }
 }
+
+/* ========== Web Search Status ========== */
+.search-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #1677ff;
+  background: #e6f4ff;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  animation: fadeIn 0.2s ease;
+}
+.search-status .spinner {
+  width: 16px; height: 16px;
+  border: 2px solid #91caff;
+  border-top-color: #1677ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

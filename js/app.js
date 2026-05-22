@@ -132,6 +132,19 @@ const App = {
       this._updateJsonPreview();
     });
 
+    // 联网搜索：toggle 显示/隐藏 Tavily Key 输入框
+    document.getElementById('webSearchToggle').addEventListener('change', () => {
+      this._syncWebSearchVisibility();
+    });
+
+    // Tavily Key 可见切换
+    document.getElementById('btnToggleTavilyVis').addEventListener('click', () => {
+      const input = document.getElementById('tavilyKeyInput');
+      const isPass = input.type === 'password';
+      input.type = isPass ? 'text' : 'password';
+      document.getElementById('btnToggleTavilyVis').textContent = isPass ? '👁' : '👁‍🗨';
+    });
+
     // 朗读速度滑块实时更新
     const ttsRateSlider = document.getElementById('ttsRate');
     if (ttsRateSlider) {
@@ -139,11 +152,20 @@ const App = {
         const valEl = document.getElementById('ttsRateValue');
         if (valEl) valEl.textContent = parseFloat(ttsRateSlider.value).toFixed(1) + 'x';
       });
+      // 滑块松开时立即保存，保证 VoiceOutput 动态读取到最新值
+      ttsRateSlider.addEventListener('change', () => {
+        SettingsStore.setTtsRate(parseFloat(ttsRateSlider.value));
+      });
     }
 
     // 诊断工具入口
     document.getElementById('btnDiagnose').addEventListener('click', () => {
       window.open('voice-test.html', '_blank');
+    });
+
+    // 综合测试入口
+    document.getElementById('btnTest').addEventListener('click', () => {
+      window.open('test.html', '_blank');
     });
   },
 
@@ -160,6 +182,11 @@ const App = {
       const valEl = document.getElementById('ttsRateValue');
       if (valEl) valEl.textContent = savedRate.toFixed(1) + 'x';
     }
+
+    // 联网搜索
+    document.getElementById('webSearchToggle').checked = SettingsStore.getWebSearch();
+    document.getElementById('tavilyKeyInput').value = SettingsStore.getTavilyKey();
+    this._syncWebSearchVisibility();
   },
 
   _syncModelSwitcher() {
@@ -185,6 +212,12 @@ const App = {
   _syncEffortSettingVisibility() {
     const thinking = SettingsStore.getThinking();
     document.getElementById('effortGroup').style.display = thinking ? 'block' : 'none';
+  },
+
+  /** 联网搜索开关打开时显示 Tavily Key 输入框 */
+  _syncWebSearchVisibility() {
+    const checked = document.getElementById('webSearchToggle').checked;
+    document.getElementById('tavilyKeyGroup').style.display = checked ? 'block' : 'none';
   },
 
   _syncEffortUI() {
@@ -432,7 +465,7 @@ const App = {
         }
 
         this._voiceOutput = VoiceOutput.create({
-          rate: SettingsStore.getTtsRate(),
+          getRate: () => SettingsStore.getTtsRate(),
           onStart: () => {},
           onEnd: () => {
             // 朗读完毕，回到监听
@@ -478,6 +511,16 @@ const App = {
     this._updateSendBtn();
 
     DeepSeekAPI.send(this._messages, {
+      onSearchStart: () => {
+        ChatUI.addSearchStatus('');
+        this._transition('ai_thinking');
+      },
+      onSearchProgress: (query) => {
+        ChatUI.updateSearchStatus(query);
+      },
+      onSearchEnd: () => {
+        ChatUI.removeSearchStatus();
+      },
       onReasoning: (chunk) => {
         if (requestId !== this._currentRequestId) return;
         if (this._currentAI) {
@@ -531,6 +574,7 @@ const App = {
       },
       onError: (type, msg) => {
         if (requestId !== this._currentRequestId) return;
+        ChatUI.removeSearchStatus();
         this._currentAI = null;
         this._currentContent = '';
         this._currentReasoning = '';
@@ -628,6 +672,11 @@ const App = {
       if (valEl) valEl.textContent = savedRate.toFixed(1) + 'x';
     }
 
+    // 回读联网搜索
+    document.getElementById('webSearchToggle').checked = SettingsStore.getWebSearch();
+    document.getElementById('tavilyKeyInput').value = SettingsStore.getTavilyKey();
+    this._syncWebSearchVisibility();
+
     this._updateJsonPreview();
   },
 
@@ -653,6 +702,11 @@ const App = {
     if (ttsRateEl) {
       SettingsStore.setTtsRate(parseFloat(ttsRateEl.value));
     }
+
+    // 保存联网搜索
+    SettingsStore.setWebSearch(document.getElementById('webSearchToggle').checked);
+    const tavilyKey = document.getElementById('tavilyKeyInput').value.trim();
+    SettingsStore.setTavilyKey(tavilyKey);
 
     this._closeSettings();
   },

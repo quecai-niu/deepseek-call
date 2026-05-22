@@ -9,7 +9,9 @@ const STORE_KEYS = {
   effort: 'ds_effort',
   thinking: 'ds_thinking',
   messages: 'ds_messages',
-  ttsRate: 'ds_tts_rate'
+  ttsRate: 'ds_tts_rate',
+  tavilyKey: 'ds_tavily_key',
+  webSearch: 'ds_web_search'
 };
 
 const SettingsStore = {
@@ -71,6 +73,22 @@ const SettingsStore = {
   },
   setTtsRate(val) {
     try { localStorage.setItem(STORE_KEYS.ttsRate, String(val)); } catch (_) { /* 静默失败 */ }
+  },
+
+  getTavilyKey() {
+    try { return localStorage.getItem(STORE_KEYS.tavilyKey) || ''; } catch (_) { return ''; }
+  },
+  setTavilyKey(val) {
+    try { localStorage.setItem(STORE_KEYS.tavilyKey, val); } catch (_) { /* 静默失败 */ }
+  },
+  getWebSearch() {
+    try {
+      const val = localStorage.getItem(STORE_KEYS.webSearch);
+      return val === 'true';
+    } catch (_) { return false; }
+  },
+  setWebSearch(val) {
+    try { localStorage.setItem(STORE_KEYS.webSearch, val ? 'true' : 'false'); } catch (_) { /* 静默失败 */ }
   },
 
   /** 动态构建 system prompt，包含当前模型和思考模式信息 */

@@ -123,5 +123,35 @@ const ChatUI = {
       this._messagesEl.scrollTop = this._messagesEl.scrollHeight;
       this._scrollRafId = null;
     });
+  },
+
+  /** 搜索状态指示器元素引用 */
+  _searchStatusEl: null,
+
+  /** 添加搜索状态指示器 */
+  addSearchStatus(query) {
+    this.removeSearchStatus();
+    const el = document.createElement('div');
+    el.className = 'search-status';
+    el.innerHTML = '<div class="spinner"></div><span class="search-status-text">正在联网搜索' + (query ? '：' + query : '...') + '</span>';
+    this._messagesEl.appendChild(el);
+    this._searchStatusEl = el;
+    this._scrollToBottom();
+  },
+
+  /** 更新搜索关键词显示 */
+  updateSearchStatus(query) {
+    if (this._searchStatusEl) {
+      const textEl = this._searchStatusEl.querySelector('.search-status-text');
+      if (textEl) textEl.textContent = '正在联网搜索：' + query;
+    }
+  },
+
+  /** 移除搜索状态指示器 */
+  removeSearchStatus() {
+    if (this._searchStatusEl) {
+      this._searchStatusEl.remove();
+      this._searchStatusEl = null;
+    }
   }
 };

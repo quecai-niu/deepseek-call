@@ -11,7 +11,7 @@ const VoiceInput = {
 
   /**
    * 创建语音识别实例
-   * @param {Object} callbacks - { onSpeechStart, onResult(text), onError(type, msg), onStateChange(state) }
+   * @param {Object} callbacks - { onSpeechStart, onResult(text), onInterimResult(text), onError(type, msg), onStateChange(state) }
    * @returns {Object} { start(), stop(), state }
    */
   create(callbacks) {
@@ -22,17 +22,16 @@ const VoiceInput = {
     }
 
     let recognition = null;
-    let _state = 'stopped'; // stopped | listening | processing
+    let _state = 'stopped'; // stopped | listening
     let _shouldRestart = false;
-    let _restartTimer = null;
     let _restartFailCount = 0;
-    let _processedIndex = 0;
 
     function _createRecognition() {
-      _processedIndex = 0;
       const rec = new SR();
       rec.lang = 'zh-CN';
-      rec.continuous = true;
+      // 使用 single-shot 模式（continuous: false），避免 Chrome 连续模式 30 秒超时问题。
+      // 每句话识别完成后 onend 触发，立即重启，消除语音丢失间隙。
+      rec.continuous = false;
       rec.interimResults = true;
 
       rec.onspeechstart = () => {
@@ -40,38 +39,50 @@ const VoiceInput = {
       };
 
       rec.onresult = (event) => {
-        let newFinal = '';
-        for (let i = _processedIndex; i < event.results.length; i++) {
+        let finalText = '';
+        let latestInterim = '';
+        for (let i = 0; i < event.results.length; i++) {
           const result = event.results[i];
           if (result.isFinal && result[0]) {
             const text = (result[0].transcript || '').trim();
             if (text && !/^[\s\p{P}]+$/u.test(text)) {
-              newFinal += text;
+              finalText += text;
+            }
+          } else if (result[0]) {
+            const text = (result[0].transcript || '').trim();
+            if (text) {
+              latestInterim = text;
             }
           }
         }
-        _processedIndex = event.results.length;
-        if (newFinal) {
-          callbacks.onResult(newFinal);
+        if (latestInterim && callbacks.onInterimResult) {
+          callbacks.onInterimResult(latestInterim);
+        }
+        if (finalText) {
+          callbacks.onResult(finalText);
         }
       };
 
       rec.onend = () => {
         if (_shouldRestart && _state === 'listening') {
-          _restartTimer = setTimeout(() => {
-            try {
-              recognition = _createRecognition();
-              recognition.start();
-              _restartFailCount = 0;
-            } catch (_) {
-              _restartFailCount++;
-              if (_restartFailCount >= 3) {
-                _shouldRestart = false;
-                _state = 'stopped';
-                callbacks.onError('restart-failed', '语音识别连续启动失败');
-              }
+          // 立即重启，消除间隙
+          try {
+            recognition = _createRecognition();
+            recognition.start();
+            _restartFailCount = 0;
+          } catch (_) {
+            _restartFailCount++;
+            if (_restartFailCount >= 3) {
+              _shouldRestart = false;
+              _state = 'stopped';
+              callbacks.onError('restart-failed', '语音识别连续启动失败');
+            } else {
+              // 等 200ms 后重试
+              setTimeout(() => { if (_shouldRestart && _state === 'listening') {
+                try { recognition = _createRecognition(); recognition.start(); _restartFailCount = 0; } catch (_) {}
+              } }, 200);
             }
-          }, 300);
+          }
         } else {
           _state = 'stopped';
           callbacks.onStateChange(_state);
@@ -114,7 +125,6 @@ const VoiceInput = {
 
       stop() {
         _shouldRestart = false;
-        if (_restartTimer) { clearTimeout(_restartTimer); _restartTimer = null; }
         if (recognition) {
           try { recognition.abort(); } catch (_) { /* 静默 */ }
           recognition = null;

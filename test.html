@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语音功能综合测试</title>
+<style>
+  /* ===== CSS 变量 ===== */
+  :root {
+    --bg:            #f5f5f5;
+    --card-bg:       #ffffff;
+    --text:          #333333;
+    --text-secondary:#666666;
+    --border:        #e0e0e0;
+    --green:         #2e7d32;
+    --green-bg:      #e8f5e9;
+    --red:           #c62828;
+    --red-bg:        #fbe9e7;
+    --amber:         #e65100;
+    --amber-bg:      #fff3e0;
+    --gray:          #9e9e9e;
+    --gray-bg:       #fafafa;
+    --primary:       #1565c0;
+    --primary-hover: #0d47a1;
+    --radius:        8px;
+    --shadow:        0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 16px;
+    min-height: 100dvh;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  /* ===== 标题区 ===== */
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  header .subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+
+  /* ===== 按钮 ===== */
+  .btn-primary {
+    display: inline-block;
+    padding: 12px 32px;
+    min-width: 180px;
+    min-height: 44px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-primary:disabled {
+    background: #90caf9;
+    cursor: not-allowed;
+  }
+  .btn-danger {
+    background: var(--red);
+  }
+  .btn-danger:hover { background: #b71c1c; }
+  .btn-danger:disabled { background: #ef9a9a; }
+
+  .btn-sm {
+    display: inline-block;
+    padding: 8px 18px;
+    min-height: 36px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.2s;
+  }
+  .btn-sm:hover { background: var(--primary-hover); }
+  .btn-sm:disabled {
+    background: #90caf9;
+    cursor: not-allowed;
+  }
+
+  .btn-sm-gray {
+    display: inline-block;
+    padding: 8px 18px;
+    min-height: 36px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #666;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.2s;
+  }
+  .btn-sm-gray:hover { background: #e4e4e4; }
+
+  .chunk-preview {
+    background: var(--gray-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    min-height: 36px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .chunk-preview .chunk-item {
+    padding: 4px 6px;
+    margin: 2px 0;
+    border-left: 3px solid var(--primary);
+    background: #f8f9ff;
+    border-radius: 2px;
+  }
+  .chunk-preview .chunk-summary {
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+  }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    cursor: default;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-header .icon {
+    font-size: 1.3rem;
+    width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .card-header .title {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .card-body {
+    padding: 14px 16px;
+    font-size: 0.88rem;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  /* ===== 表单 ===== */
+  .form-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .form-row label {
+    font-weight: 500;
+    min-width: 60px;
+    font-size: 0.88rem;
+  }
+  .form-row input[type="text"],
+  .form-row textarea {
+    flex: 1;
+    min-width: 120px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.88rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-row input[type="text"]:focus,
+  .form-row textarea:focus {
+    border-color: var(--primary);
+  }
+  .form-row textarea {
+    min-height: 60px;
+    resize: vertical;
+  }
+  .form-row .value-display {
+    min-width: 48px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--primary);
+  }
+  input[type="range"] {
+    flex: 1;
+    min-width: 100px;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border);
+    border-radius: 3px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+  }
+
+  /* ===== 显示区域 ===== */
+  .result-box {
+    background: var(--gray-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    min-height: 40px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .result-box .interim {
+    color: var(--amber);
+  }
+  .result-box .final {
+    color: var(--green);
+    font-weight: 500;
+  }
+  .result-box .status-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin-right: 6px;
+  }
+  .status-tag.listening { background: #e8eaf6; color: #283593; }
+  .status-tag.recognizing { background: #fff3e0; color: #e65100; }
+  .status-tag.done { background: #e8f5e9; color: #2e7d32; }
+  .status-tag.error { background: #fbe9e7; color: #c62828; }
+
+  /* ===== 日志区 ===== */
+  .log-area {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    margin-top: 6px;
+  }
+  .log-area .log-time {
+    color: #888;
+  }
+  .log-area .log-info {
+    color: #4fc3f7;
+  }
+  .log-area .log-success {
+    color: #81c784;
+  }
+  .log-area .log-warn {
+    color: #ffb74d;
+  }
+  .log-area .log-error {
+    color: #e57373;
+  }
+
+  /* ===== 排查信息 ===== */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .info-item {
+    padding: 8px 10px;
+    background: var(--gray-bg);
+    border-radius: var(--radius);
+    font-size: 0.82rem;
+  }
+  .info-item .label {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+  }
+  .info-item .value {
+    font-weight: 500;
+    margin-top: 2px;
+  }
+  .info-item .value.pass { color: var(--green); }
+  .info-item .value.fail { color: var(--red); }
+  .info-item .value.warn { color: var(--amber); }
+
+  .voice-list {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .voice-list .voice-item {
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .voice-list .voice-item:last-child { border-bottom: none; }
+
+  /* ===== 移动端适配 ===== */
+  @media (max-width: 768px) {
+    body { padding: 10px; }
+    header h1 { font-size: 1.25rem; }
+    .card-header { padding: 12px; }
+    .card-body { padding: 12px; }
+    .info-grid { grid-template-columns: 1fr; }
+    .form-row { flex-direction: column; align-items: stretch; }
+    .form-row label { min-width: auto; }
+    .form-row input[type="text"], .form-row textarea { min-width: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>语音功能综合测试</h1>
+    <p class="subtitle">录音识别 / TTS 朗读速度 / 环境排查</p>
+  </header>
+
+  <!-- ===== 排查信息 ===== -->
+  <div class="card" id="infoCard">
+    <div class="card-header">
+      <span class="icon">&#128269;</span>
+      <span class="title">环境与排查信息</span>
+    </div>
+    <div class="card-body">
+      <div class="info-grid" id="infoGrid">
+        <div class="info-item"><div class="label">SpeechRecognition</div><div class="value" id="infoSR">检测中...</div></div>
+        <div class="info-item"><div class="label">SpeechSynthesis</div><div class="value" id="infoSS">检测中...</div></div>
+        <div class="info-item"><div class="label">麦克风权限</div><div class="value" id="infoMic">检测中...</div></div>
+        <div class="info-item"><div class="label">中文语音包</div><div class="value" id="infoVoices">检测中...</div></div>
+      </div>
+      <div style="margin-top:8px; font-size:0.82rem; font-weight:500;">可用中文语音包：</div>
+      <div class="voice-list" id="voiceList">加载中...</div>
+    </div>
+  </div>
+
+  <!-- ===== 1. 录音识别测试 ===== -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">&#127908;</span>
+      <span class="title">录音识别测试</span>
+      <button class="btn-sm" id="btnRecordStart" onclick="startRecognition()">开始录音</button>
+      <button class="btn-sm btn-danger" id="btnRecordStop" onclick="stopRecognition()" disabled>停止</button>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <span><strong>识别状态：</strong><span id="recStatus">空闲</span></span>
+        <span><strong>累计轮次：</strong><span id="recRound">0</span></span>
+      </div>
+      <div class="result-box" id="recResult">
+        <span style="color:var(--text-secondary);">点击"开始录音"后在此处显示识别结果...</span>
+      </div>
+      <div style="margin-top:10px;padding:8px 10px;background:#f0f4ff;border-radius:var(--radius);font-size:0.82rem;color:var(--text-secondary);border:1px solid #d0d8f0;">
+        当前测试使用原生 SpeechRecognition API。主应用使用 VoiceInput 封装，支持 <code>onInterimResult</code> 实时回调。
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 2. TTS 朗读速度测试 ===== -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">&#128266;</span>
+      <span class="title">TTS 朗读速度测试</span>
+      <button class="btn-sm" id="btnSpeak" onclick="startSpeak()">朗读</button>
+      <button class="btn-sm btn-danger" id="btnSpeakStop" onclick="stopSpeak()" disabled>停止</button>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <label for="speakText">朗读文本</label>
+        <textarea id="speakText" placeholder="输入要朗读的中文文本..." rows="2">语音朗读速度测试，欢迎使用 DeepSeek 语音对话应用。</textarea>
+      </div>
+      <div class="form-row">
+        <button class="btn-sm-gray" onclick="fillLongText()">填入长文本（无标点）</button>
+        <span style="font-size:0.78rem;color:var(--text-secondary);">约150字连续文本，测试长句切分</span>
+      </div>
+      <div class="form-row" style="flex-direction:column;align-items:stretch;">
+        <label style="min-width:auto;margin-bottom:4px;">分块预览</label>
+        <div class="chunk-preview" id="chunkPreview">未切分</div>
+      </div>
+      <div class="form-row">
+        <label for="speedSlider">朗读速度</label>
+        <input type="range" id="speedSlider" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateSpeedDisplay()">
+        <span class="value-display" id="speedDisplay">1.0x</span>
+      </div>
+      <div class="result-box" id="speakStatus" style="min-height:30px; max-height:60px;">
+        点击"朗读"开始测试
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 3. 操作日志 ===== -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">&#128196;</span>
+      <span class="title">操作日志</span>
+      <button class="btn-sm" onclick="clearLog()">清空</button>
+    </div>
+    <div class="card-body">
+      <div class="log-area" id="logArea">
+        <div><span class="log-time">[--:--:--]</span> <span class="log-info">页面已加载</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ===================================================================
+ * 全局状态
+ * =================================================================== */
+const state = {
+  recognition: null,
+  isRecognizing: false,
+  roundCount: 0,
+  speechSynth: window.speechSynthesis,
+  currentUtterance: null,
+  currentSpeed: 1.0,
+};
+
+/* ===================================================================
+ * 工具函数
+ * =================================================================== */
+function getTimestamp() {
+  const d = new Date();
+  return d.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+function getFullTimestamp() {
+  const d = new Date();
+  return d.toLocaleString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+function esc(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/* ===================================================================
+ * 日志
+ * =================================================================== */
+function addLog(msg, type) {
+  const area = document.getElementById('logArea');
+  const cls = type === 'error' ? 'log-error' : (type === 'warn' ? 'log-warn' : (type === 'success' ? 'log-success' : 'log-info'));
+  area.insertAdjacentHTML('beforeend', `<div><span class="log-time">[${getTimestamp()}]</span> <span class="${cls}">${esc(msg)}</span></div>`);
+  area.scrollTop = area.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('logArea').innerHTML = '';
+  addLog('日志已清空', 'info');
+}
+
+/* ===================================================================
+ * 环境检测（页面加载时自动执行）
+ * =================================================================== */
+function checkEnvironment() {
+  // SpeechRecognition
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const srEl = document.getElementById('infoSR');
+  if (SR) {
+    const isStd = !!window.SpeechRecognition;
+    srEl.textContent = '可用 (' + (isStd ? '标准 API' : 'webkit 前缀') + ')';
+    srEl.className = 'value pass';
+    addLog('SpeechRecognition 可用 (' + (isStd ? '标准' : 'webkit') + ')', 'success');
+  } else {
+    srEl.textContent = '不可用';
+    srEl.className = 'value fail';
+    addLog('SpeechRecognition 不可用', 'error');
+  }
+
+  // SpeechSynthesis
+  const ssEl = document.getElementById('infoSS');
+  if (window.speechSynthesis) {
+    ssEl.textContent = '可用';
+    ssEl.className = 'value pass';
+    addLog('SpeechSynthesis 可用', 'success');
+  } else {
+    ssEl.textContent = '不可用';
+    ssEl.className = 'value fail';
+    addLog('SpeechSynthesis 不可用', 'error');
+  }
+
+  // 麦克风权限
+  checkMicPermission();
+
+  // 中文语音包
+  loadVoices();
+}
+
+async function checkMicPermission() {
+  const micEl = document.getElementById('infoMic');
+  if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' });
+      micEl.textContent = result.state === 'granted' ? '已授权' : (result.state === 'prompt' ? '未请求' : '已拒绝');
+      micEl.className = 'value ' + (result.state === 'granted' ? 'pass' : (result.state === 'denied' ? 'fail' : 'warn'));
+      addLog('麦克风权限状态: ' + result.state, result.state === 'granted' ? 'success' : (result.state === 'denied' ? 'error' : 'warn'));
+    } catch (e) {
+      micEl.textContent = '不支持查询';
+      micEl.className = 'value warn';
+      addLog('麦克风权限查询不支持: ' + e.message, 'warn');
+    }
+  } else {
+    micEl.textContent = '不支持查询';
+    micEl.className = 'value warn';
+    addLog('当前浏览器不支持 permissions API', 'warn');
+  }
+}
+
+function loadVoices() {
+  const synth = window.speechSynthesis;
+  const voiceListEl = document.getElementById('voiceList');
+  const voicesCountEl = document.getElementById('infoVoices');
+
+  if (!synth) {
+    voiceListEl.textContent = 'speechSynthesis 不可用';
+    voicesCountEl.textContent = '不可用';
+    voicesCountEl.className = 'value fail';
+    return;
+  }
+
+  let resolved = false;
+
+  function updateVoices() {
+    if (resolved) return;
+    resolved = true;
+
+    const allVoices = synth.getVoices();
+    const zhVoices = allVoices.filter((v) => v.lang && v.lang.toLowerCase().startsWith('zh'));
+    const zhList = zhVoices.map((v) => v.name + ' (' + v.lang + ')');
+
+    voicesCountEl.textContent = zhVoices.length + ' 个';
+    voicesCountEl.className = 'value ' + (zhVoices.length > 0 ? 'pass' : 'warn');
+
+    if (zhVoices.length > 0) {
+      voiceListEl.innerHTML = zhVoices.map((v) =>
+        '<div class="voice-item">' + esc(v.name) + ' &mdash; ' + esc(v.lang) + (v.default ? ' [默认]' : '') + '</div>'
+      ).join('');
+      addLog('找到 ' + zhVoices.length + ' 个中文语音包', 'success');
+    } else {
+      voiceListEl.innerHTML = '<div style="color:var(--amber);">未检测到中文语音包</div>';
+      addLog('未检测到中文语音包', 'warn');
+    }
+  }
+
+  // 监听 voiceschanged
+  synth.addEventListener('voiceschanged', updateVoices, { once: true });
+
+  // 立即尝试
+  const immediate = synth.getVoices();
+  if (immediate.length > 0) {
+    synth.removeEventListener('voiceschanged', updateVoices);
+    resolved = true;
+    const zhVoices = immediate.filter((v) => v.lang && v.lang.toLowerCase().startsWith('zh'));
+    voicesCountEl.textContent = zhVoices.length + ' 个';
+    voicesCountEl.className = 'value ' + (zhVoices.length > 0 ? 'pass' : 'warn');
+    if (zhVoices.length > 0) {
+      voiceListEl.innerHTML = zhVoices.map((v) =>
+        '<div class="voice-item">' + esc(v.name) + ' &mdash; ' + esc(v.lang) + (v.default ? ' [默认]' : '') + '</div>'
+      ).join('');
+      addLog('找到 ' + zhVoices.length + ' 个中文语音包', 'success');
+    } else {
+      voiceListEl.innerHTML = '<div style="color:var(--amber);">未检测到中文语音包</div>';
+      addLog('未检测到中文语音包', 'warn');
+    }
+  } else {
+    // 3 秒超时
+    setTimeout(() => {
+      if (!resolved) {
+        synth.removeEventListener('voiceschanged', updateVoices);
+        resolved = true;
+        const allVoices = synth.getVoices();
+        const zhV = allVoices.filter((v) => v.lang && v.lang.toLowerCase().startsWith('zh'));
+        voicesCountEl.textContent = zhV.length + ' 个 (超时)';
+        voicesCountEl.className = 'value ' + (zhV.length > 0 ? 'pass' : 'warn');
+        voiceListEl.innerHTML = zhV.length > 0
+          ? zhV.map((v) => '<div class="voice-item">' + esc(v.name) + ' &mdash; ' + esc(v.lang) + '</div>').join('')
+          : '<div style="color:var(--amber);">语音包加载超时或无中文语音包</div>';
+        addLog('语音包加载超时(3s)，找到 ' + zhV.length + ' 个中文语音包', 'warn');
+      }
+    }, 3000);
+  }
+}
+
+/* ===================================================================
+ * 录音识别测试
+ * =================================================================== */
+function startRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    addLog('SpeechRecognition API 不可用', 'error');
+    return;
+  }
+
+  if (state.isRecognizing) {
+    addLog('已在识别中，请先停止', 'warn');
+    return;
+  }
+
+  // 先请求麦克风权限（用于信息展示）- 无需显式调用，SpeechRecognition.start() 会自动请求
+
+  state.isRecognizing = true;
+  document.getElementById('btnRecordStart').disabled = true;
+  document.getElementById('btnRecordStop').disabled = false;
+  document.getElementById('recStatus').textContent = '启动中...';
+
+  addLog('录音识别已启动', 'info');
+
+  // 连续识别循环
+  runRecognitionLoop();
+}
+
+async function runRecognitionLoop() {
+  while (state.isRecognizing) {
+    await doSingleRecognition();
+    // 轮次间短暂停顿
+    if (state.isRecognizing) {
+      await sleep(200);
+    }
+  }
+}
+
+function doSingleRecognition() {
+  return new Promise((resolve) => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = 'zh-CN';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    state.recognition = recognition;
+
+    let hasFinal = false;
+    let settled = false;
+
+    function settle() {
+      if (settled) return;
+      settled = true;
+      try { recognition.abort(); } catch (_) {}
+      state.recognition = null;
+      resolve();
+    }
+
+    // 更新状态显示
+    document.getElementById('recStatus').textContent = '聆听中...';
+    document.getElementById('recStatus').className = 'status-tag listening';
+
+    const resultBox = document.getElementById('recResult');
+
+    recognition.onresult = (event) => {
+      let finalText = '';
+      let interimText = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalText += result[0].transcript;
+        } else {
+          interimText += result[0].transcript;
+        }
+      }
+
+      if (interimText) {
+        // 有中间结果 → 显示为"识别中"
+        document.getElementById('recStatus').textContent = '识别中...';
+        document.getElementById('recStatus').className = 'status-tag recognizing';
+      }
+
+      // 构建显示内容
+      let displayHtml = '';
+      if (finalText) {
+        hasFinal = true;
+        displayHtml += '<span class="status-tag done">最终</span> <span class="final">' + esc(finalText) + '</span>';
+        addLog('识别最终结果: "' + finalText + '"', 'success');
+      }
+      if (interimText) {
+        displayHtml += '<span class="status-tag listening">中间</span> <span class="interim">' + esc(interimText) + '</span>';
+      }
+
+      if (displayHtml) {
+        // 保留之前的最终结果（累积显示）
+        const existingFinals = resultBox.querySelectorAll('.final-row');
+        let accumHtml = '';
+        existingFinals.forEach((el) => { accumHtml += el.outerHTML; });
+        if (finalText) {
+          accumHtml += '<div class="final-row"><span class="status-tag done">最终</span> <span class="final">' + esc(finalText) + '</span></div>';
+          state.roundCount++;
+          document.getElementById('recRound').textContent = state.roundCount;
+        }
+        resultBox.innerHTML = accumHtml +
+          (interimText
+            ? '<div class="interim-row"><span class="status-tag recognizing">中间</span> <span class="interim">' + esc(interimText) + '</span></div>'
+            : '');
+        resultBox.scrollTop = resultBox.scrollHeight;
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === 'no-speech') {
+        // 没说话，静默忽略
+        document.getElementById('recStatus').textContent = '未检测到语音';
+        document.getElementById('recStatus').className = 'status-tag error';
+        addLog('未检测到语音 (no-speech)', 'warn');
+      } else if (event.error === 'aborted') {
+        // 被中止，不记录
+      } else {
+        document.getElementById('recStatus').textContent = '错误: ' + event.error;
+        document.getElementById('recStatus').className = 'status-tag error';
+        addLog('识别错误: ' + event.error, 'error');
+      }
+      settle();
+    };
+
+    recognition.onend = () => {
+      if (!settled) {
+        if (!hasFinal) {
+          document.getElementById('recStatus').textContent = '结束（无结果）';
+          document.getElementById('recStatus').className = 'status-tag done';
+        } else {
+          document.getElementById('recStatus').textContent = '识别结束';
+          document.getElementById('recStatus').className = 'status-tag done';
+        }
+        settle();
+      }
+    };
+
+    try {
+      recognition.start();
+      addLog('单轮识别已启动，等待语音...', 'info');
+    } catch (err) {
+      document.getElementById('recStatus').textContent = '启动失败';
+      document.getElementById('recStatus').className = 'status-tag error';
+      addLog('识别启动失败: ' + err.message, 'error');
+      settle();
+    }
+  });
+}
+
+function stopRecognition() {
+  if (state.recognition) {
+    try { state.recognition.abort(); } catch (_) {}
+    state.recognition = null;
+  }
+  state.isRecognizing = false;
+  document.getElementById('btnRecordStart').disabled = false;
+  document.getElementById('btnRecordStop').disabled = true;
+  document.getElementById('recStatus').textContent = '已停止';
+  document.getElementById('recStatus').className = 'status-tag error';
+  addLog('录音识别已手动停止', 'warn');
+}
+
+/* ===================================================================
+ * TTS 朗读速度测试
+ * =================================================================== */
+function updateSpeedDisplay() {
+  const val = parseFloat(document.getElementById('speedSlider').value);
+  document.getElementById('speedDisplay').textContent = val.toFixed(1) + 'x';
+  state.currentSpeed = val;
+  addLog('朗读速度已设置为 ' + val.toFixed(1) + 'x', 'info');
+}
+
+function startSpeak() {
+  const synth = state.speechSynth;
+  if (!synth) {
+    addLog('SpeechSynthesis API 不可用', 'error');
+    return;
+  }
+
+  const text = document.getElementById('speakText').value.trim();
+  if (!text) {
+    addLog('请输入朗读文本', 'warn');
+    return;
+  }
+
+  // 取消当前朗读
+  synth.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'zh-CN';
+  utterance.rate = state.currentSpeed;
+
+  // 优先使用中文语音
+  const allVoices = synth.getVoices();
+  const zhVoice = allVoices.find((v) => v.lang && v.lang.toLowerCase().startsWith('zh'));
+  if (zhVoice) {
+    utterance.voice = zhVoice;
+  }
+
+  state.currentUtterance = utterance;
+
+  document.getElementById('btnSpeak').disabled = true;
+  document.getElementById('btnSpeakStop').disabled = false;
+  document.getElementById('speakStatus').textContent = '正在朗读... (速度: ' + state.currentSpeed.toFixed(1) + 'x)';
+
+  addLog('开始朗读: "' + text.substring(0, 30) + (text.length > 30 ? '...' : '') + '" 速度: ' + state.currentSpeed.toFixed(1) + 'x', 'info');
+
+  utterance.onstart = () => {
+    document.getElementById('speakStatus').textContent = '朗读中... (速度: ' + state.currentSpeed.toFixed(1) + 'x)';
+    addLog('朗读已开始', 'success');
+  };
+
+  utterance.onend = () => {
+    state.currentUtterance = null;
+    document.getElementById('btnSpeak').disabled = false;
+    document.getElementById('btnSpeakStop').disabled = true;
+    document.getElementById('speakStatus').textContent = '朗读完成';
+    addLog('朗读完成', 'success');
+  };
+
+  utterance.onerror = (event) => {
+    state.currentUtterance = null;
+    document.getElementById('btnSpeak').disabled = false;
+    document.getElementById('btnSpeakStop').disabled = true;
+    document.getElementById('speakStatus').textContent = '朗读错误: ' + (event.error || '未知');
+    addLog('朗读错误: ' + (event.error || '未知'), 'error');
+  };
+
+  try {
+    synth.speak(utterance);
+  } catch (err) {
+    state.currentUtterance = null;
+    document.getElementById('btnSpeak').disabled = false;
+    document.getElementById('btnSpeakStop').disabled = true;
+    document.getElementById('speakStatus').textContent = '朗读启动失败';
+    addLog('speak() 调用失败: ' + err.message, 'error');
+  }
+}
+
+function stopSpeak() {
+  const synth = state.speechSynth;
+  if (synth) {
+    synth.cancel();
+  }
+  state.currentUtterance = null;
+  document.getElementById('btnSpeak').disabled = false;
+  document.getElementById('btnSpeakStop').disabled = true;
+  document.getElementById('speakStatus').textContent = '已停止';
+  addLog('朗读已手动停止', 'warn');
+}
+
+/* ===================================================================
+ * 长文本无标点测试
+ * =================================================================== */
+const _LONG_TEXT_NO_PUNCT =
+  '系统当前正在处理您的请求请耐心等待结果即将返回数据处理模块已完成初步分析正在进行下一步运算' +
+  '所有资源均已分配完毕正在执行队列中的任务请确认操作是否继续执行完成后将自动通知相关模块' +
+  '请保持网络连接稳定以确保数据同步完整如需帮助请联系技术支持人员获取更多信息感谢您的配合' +
+  '与支持欢迎再次使用智能语音系统';
+
+function fillLongText() {
+  document.getElementById('speakText').value = _LONG_TEXT_NO_PUNCT;
+  previewChunks();
+  addLog('已填入长文本（无标点）共 ' + _LONG_TEXT_NO_PUNCT.length + ' 字', 'info');
+}
+
+/**
+ * 根据 80 字符硬切分规则预览分块
+ * 与 voice-output.js 的 _splitLongSentence 逻辑一致
+ */
+function previewChunks() {
+  const text = document.getElementById('speakText').value.trim();
+  if (!text) {
+    document.getElementById('chunkPreview').textContent = '未切分（文本为空）';
+    return;
+  }
+
+  // 先按标点切分句子
+  const delimRe = /([。！？!?\.\n])/g;
+  const sentences = [];
+  let lastIdx = 0;
+  let match;
+  while ((match = delimRe.exec(text)) !== null) {
+    const end = match.index + match[0].length;
+    const s = text.slice(lastIdx, end).trim();
+    if (s) sentences.push(s);
+    lastIdx = end;
+  }
+  const remaining = text.slice(lastIdx).trim();
+  if (remaining) sentences.push(remaining);
+
+  // 对每段检查是否需要硬切分（超过 80 字则按 80 字符硬切）
+  const MAX_LEN = 80;
+  const chunks = [];
+  for (const sentence of sentences) {
+    if (sentence.length > MAX_LEN) {
+      for (let i = 0; i < sentence.length; i += MAX_LEN) {
+        const chunk = sentence.slice(i, i + MAX_LEN).trim();
+        if (chunk) chunks.push(chunk);
+      }
+    } else if (sentence) {
+      chunks.push(sentence);
+    }
+  }
+
+  // 显示分块预览
+  const container = document.getElementById('chunkPreview');
+  if (chunks.length <= 1 && text.length <= MAX_LEN) {
+    container.innerHTML = '<span style="color:var(--text-secondary);">文本较短，无需切分（共 ' + text.length + ' 字）</span>';
+    return;
+  }
+
+  let html = '<div class="chunk-summary">共 ' + chunks.length + ' 段（原始 ' + text.length + ' 字，每段上限 ' + MAX_LEN + ' 字）</div>';
+  chunks.forEach((chunk, idx) => {
+    const preview = chunk.length > 20 ? chunk.substring(0, 20) + '...' : chunk;
+    html += '<div class="chunk-item">[' + (idx + 1) + '/' + chunks.length + '] ' + esc(preview) + ' <span style="color:var(--text-secondary);font-size:0.78rem;">(' + chunk.length + ' 字)</span></div>';
+  });
+  container.innerHTML = html;
+}
+
+/* ===================================================================
+ * 页面初始化
+ * =================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  checkEnvironment();
+  addLog('综合测试页面就绪', 'info');
+});
+</script>
+</body>
+</html>
