@@ -1191,6 +1191,9 @@ const TEST_SCENARIOS = [
   { id: 'test_math',     label: '数字计算',       file: 'test-audio/test_math.wav',     expected: '一加一等于几', duration: 2 },
   { id: 'test_code',     label: '写代码请求',     file: 'test-audio/test_code.wav',     expected: '用Python写一个冒泡排序', duration: 3 },
   { id: 'test_translate',label: '翻译请求',       file: 'test-audio/test_translate.wav',expected: '翻译成英文，今天是个好日子', duration: 3 },
+  { id: 'test_concat_short',label: '拼接500ms(短间隔)',file:'test-audio/test_concat_short.wav',expected:'帮我写一首关于春天的诗帮我写一首诗，关于春天的，要五言绝句', duration: 6 },
+  { id: 'test_concat_long', label:'拼接2000ms(长间隔)',file:'test-audio/test_concat_long.wav', expected:'帮我写一首关于春天的诗帮我写一首诗，关于春天的，要五言绝句', duration: 8 },
+  { id: 'test_concat_two',  label:'拼接两短句(500ms)', file:'test-audio/test_concat_two.wav', expected:'今天天气怎么样帮我写一首关于春天的诗', duration: 5 },
 ];
 
 function initAutoTest() {

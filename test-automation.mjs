@@ -67,6 +67,9 @@ const SCENARIOS = [
   { idx: 4, name: '数字计算',       file: 'test_math.wav' },
   { idx: 5, name: '写代码请求',     file: 'test_code.wav' },
   { idx: 6, name: '翻译请求',       file: 'test_translate.wav' },
+  { idx: 7, name: '拼接500ms短间隔', file: 'test_concat_short.wav' },
+  { idx: 8, name: '拼接2000ms长间隔',file: 'test_concat_long.wav' },
+  { idx: 9, name: '拼接两短句500ms', file: 'test_concat_two.wav' },
 ];
 
 /* ===================================================================
