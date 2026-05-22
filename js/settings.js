@@ -8,7 +8,8 @@ const STORE_KEYS = {
   model: 'ds_model',
   effort: 'ds_effort',
   thinking: 'ds_thinking',
-  messages: 'ds_messages'
+  messages: 'ds_messages',
+  ttsRate: 'ds_tts_rate'
 };
 
 const SettingsStore = {
@@ -60,6 +61,16 @@ const SettingsStore = {
   },
   clearMessages() {
     try { localStorage.removeItem(STORE_KEYS.messages); } catch (_) { /* 静默失败 */ }
+  },
+
+  getTtsRate() {
+    try {
+      const val = parseFloat(localStorage.getItem(STORE_KEYS.ttsRate));
+      return isNaN(val) ? 1.0 : Math.min(2.0, Math.max(0.5, val));
+    } catch (_) { return 1.0; }
+  },
+  setTtsRate(val) {
+    try { localStorage.setItem(STORE_KEYS.ttsRate, String(val)); } catch (_) { /* 静默失败 */ }
   },
 
   /** 动态构建 system prompt，包含当前模型和思考模式信息 */

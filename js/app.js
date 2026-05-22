@@ -131,12 +131,35 @@ const App = {
       this._syncEffortSettingVisibility();
       this._updateJsonPreview();
     });
+
+    // 朗读速度滑块实时更新
+    const ttsRateSlider = document.getElementById('ttsRate');
+    if (ttsRateSlider) {
+      ttsRateSlider.addEventListener('input', () => {
+        const valEl = document.getElementById('ttsRateValue');
+        if (valEl) valEl.textContent = parseFloat(ttsRateSlider.value).toFixed(1) + 'x';
+      });
+    }
+
+    // 诊断工具入口
+    document.getElementById('btnDiagnose').addEventListener('click', () => {
+      window.open('voice-test.html', '_blank');
+    });
   },
 
   _loadSettings() {
     document.getElementById('apiKeyInput').value = SettingsStore.getApiKey();
     // model switcher 同步在 _syncModelSwitcher 中处理
     // effort 同步在 _syncEffortUI 中处理
+
+    // 加载朗读速度
+    const savedRate = SettingsStore.getTtsRate();
+    const ttsRateEl = document.getElementById('ttsRate');
+    if (ttsRateEl) {
+      ttsRateEl.value = savedRate;
+      const valEl = document.getElementById('ttsRateValue');
+      if (valEl) valEl.textContent = savedRate.toFixed(1) + 'x';
+    }
   },
 
   _syncModelSwitcher() {
@@ -409,6 +432,7 @@ const App = {
         }
 
         this._voiceOutput = VoiceOutput.create({
+          rate: SettingsStore.getTtsRate(),
           onStart: () => {},
           onEnd: () => {
             // 朗读完毕，回到监听
@@ -594,6 +618,16 @@ const App = {
     document.getElementById('thinkingToggle').checked = SettingsStore.getThinking();
     this._syncEffortSettingVisibility();
     this._syncEffortUI();
+
+    // 回读朗读速度
+    const savedRate = SettingsStore.getTtsRate();
+    const ttsRateEl = document.getElementById('ttsRate');
+    if (ttsRateEl) {
+      ttsRateEl.value = savedRate;
+      const valEl = document.getElementById('ttsRateValue');
+      if (valEl) valEl.textContent = savedRate.toFixed(1) + 'x';
+    }
+
     this._updateJsonPreview();
   },
 
@@ -612,6 +646,12 @@ const App = {
     const activeEffort = document.querySelector('.effort-opt.active');
     if (activeEffort) {
       SettingsStore.setEffort(activeEffort.dataset.effort);
+    }
+
+    // 保存朗读速度
+    const ttsRateEl = document.getElementById('ttsRate');
+    if (ttsRateEl) {
+      SettingsStore.setTtsRate(parseFloat(ttsRateEl.value));
     }
 
     this._closeSettings();

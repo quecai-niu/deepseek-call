@@ -40,7 +40,7 @@ const VoiceOutput = {
       const sentence = _queue.shift();
       const utterance = new SpeechSynthesisUtterance(sentence);
       utterance.lang = 'zh-CN';
-      utterance.rate = 1.0;
+      utterance.rate = callbacks.rate || 1.0;
       utterance.onstart = () => {
         _speaking = true;
         callbacks.onStart();

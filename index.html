@@ -14,6 +14,7 @@
   <div class="toolbar-actions">
     <button class="toolbar-btn" id="btnClear" title="清空对话">&#128465;</button>
     <button class="toolbar-btn" id="btnCall" title="语音通话">&#128222;</button>
+    <button class="toolbar-btn" id="btnDiagnose" title="诊断工具">&#128300;</button>
     <button class="toolbar-btn" id="btnSettings" title="设置">&#9881;</button>
   </div>
 </div>
@@ -82,6 +83,11 @@
         <button class="effort-opt active" data-effort="high">High</button>
         <button class="effort-opt" data-effort="max">Max</button>
       </div>
+    </div>
+
+    <div class="form-group">
+      <label>朗读速度：<span id="ttsRateValue">1.0x</span></label>
+      <input type="range" id="ttsRate" min="0.5" max="2.0" step="0.1" value="1.0">
     </div>
 
     <div class="form-group">
