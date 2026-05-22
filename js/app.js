@@ -453,7 +453,7 @@ const App = {
           onStateChange: (state) => {
             // VoiceInput 内部状态变化，用于跟踪
           }
-        });
+        }, 800);
         if (!this._voiceInput) { this._transition('idle'); return; }
 
         // 检测浏览器是否支持语音播报，不支持则降级为纯文字

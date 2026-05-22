@@ -353,6 +353,59 @@
     .form-row label { min-width: auto; }
     .form-row input[type="text"], .form-row textarea { min-width: auto; }
   }
+  /* ===== 模拟输入面板 ===== */
+  .sim-divider {
+    margin: 16px 0 12px 0;
+    border: none;
+    border-top: 1px dashed var(--border);
+  }
+  .sim-toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    user-select: none;
+  }
+  .sim-toggle-wrap input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--primary);
+  }
+  .sim-toggle-wrap label {
+    font-size: 0.88rem;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .sim-panel {
+    background: #f8faff;
+    border: 1px solid #d0d8f0;
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-top: 8px;
+  }
+  .sim-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .btn-sm-outline {
+    display: inline-block;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    color: var(--primary);
+    background: #fff;
+    border: 1px solid var(--primary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: all 0.2s;
+  }
+  .btn-sm-outline:hover {
+    color: #fff;
+    background: var(--primary);
+  }
 </style>
 </head>
 <body>
@@ -399,6 +452,27 @@
       </div>
       <div style="margin-top:10px;padding:8px 10px;background:#f0f4ff;border-radius:var(--radius);font-size:0.82rem;color:var(--text-secondary);border:1px solid #d0d8f0;">
         当前测试使用原生 SpeechRecognition API。主应用使用 VoiceInput 封装，支持 <code>onInterimResult</code> 实时回调。
+      </div>
+      <hr class="sim-divider">
+      <div class="sim-toggle-wrap">
+        <input type="checkbox" id="simToggle" onchange="toggleSimMode()">
+        <label for="simToggle">🎛️ 启用模拟输入（打字代替说话）</label>
+      </div>
+      <div class="sim-panel" id="simPanel" style="display:none;">
+        <div class="form-row">
+          <label for="simText" style="min-width:auto;">模拟文本</label>
+          <input type="text" id="simText" placeholder="输入要模拟的语音识别文本，然后点击发送..." style="flex:1;">
+        </div>
+        <div class="sim-presets">
+          <button class="btn-sm-outline" onclick="setSimText('你好，今天天气怎么样？')">🌤 天气询问</button>
+          <button class="btn-sm-outline" onclick="setSimText('帮我写一首关于春天的诗')">📝 写诗请求</button>
+          <button class="btn-sm-outline" onclick="setSimText('什么是深度学习？')">📖 知识问答</button>
+          <button class="btn-sm-outline" onclick="setSimText('用Python写一个冒泡排序')">💻 写代码</button>
+          <button class="btn-sm-outline" onclick="setSimText('翻译成英文：今天是个好日子')">🌐 翻译请求</button>
+        </div>
+        <div class="form-row" style="justify-content:flex-end;">
+          <button class="btn-sm" id="btnSimSend" onclick="sendSimulatedSpeech()" disabled>📤 发送模拟语音</button>
+        </div>
       </div>
     </div>
   </div>
@@ -462,6 +536,7 @@ const state = {
   speechSynth: window.speechSynthesis,
   currentUtterance: null,
   currentSpeed: 1.0,
+  simMode: false,
 };
 
 /* ===================================================================
@@ -652,6 +727,17 @@ function startRecognition() {
   state.isRecognizing = true;
   document.getElementById('btnRecordStart').disabled = true;
   document.getElementById('btnRecordStop').disabled = false;
+
+  // 模拟模式：不启动真实语音识别
+  if (state.simMode) {
+    document.getElementById('recStatus').textContent = '模拟模式已启动';
+    document.getElementById('recStatus').className = 'status-tag recognizing';
+    document.getElementById('btnSimSend').disabled = false;
+    document.getElementById('simText').focus();
+    addLog('模拟模式已启动，输入文本后点击"发送模拟语音"', 'info');
+    return;
+  }
+
   document.getElementById('recStatus').textContent = '启动中...';
 
   addLog('录音识别已启动', 'info');
@@ -797,7 +883,82 @@ function stopRecognition() {
   document.getElementById('btnRecordStop').disabled = true;
   document.getElementById('recStatus').textContent = '已停止';
   document.getElementById('recStatus').className = 'status-tag error';
+  // 模拟模式：重置发送按钮
+  document.getElementById('btnSimSend').disabled = true;
   addLog('录音识别已手动停止', 'warn');
+}
+
+/* ===================================================================
+ * 模拟输入
+ * =================================================================== */
+function toggleSimMode() {
+  state.simMode = document.getElementById('simToggle').checked;
+  document.getElementById('simPanel').style.display = state.simMode ? 'block' : 'none';
+  if (!state.simMode && !state.isRecognizing) {
+    document.getElementById('btnSimSend').disabled = true;
+  }
+}
+
+function setSimText(text) {
+  document.getElementById('simText').value = text;
+  if (state.isRecognizing && state.simMode) {
+    document.getElementById('btnSimSend').disabled = false;
+    document.getElementById('simText').focus();
+  }
+}
+
+function sendSimulatedSpeech() {
+  if (!state.isRecognizing || !state.simMode) return;
+  const text = document.getElementById('simText').value.trim();
+  if (!text) return;
+
+  // Disable send button, clear input
+  document.getElementById('btnSimSend').disabled = true;
+  document.getElementById('simText').value = '';
+
+  addLog('模拟语音输入: "' + text + '"', 'info');
+
+  const resultBox = document.getElementById('recResult');
+
+  // Step 1: Show interim (模拟语音识别的中间过程)
+  document.getElementById('recStatus').textContent = '识别中...';
+  document.getElementById('recStatus').className = 'status-tag recognizing';
+  resultBox.innerHTML +=
+    '<div class="interim-row" id="simInterimRow"><span class="status-tag recognizing">中间</span> <span class="interim">' + esc(text) + '</span></div>';
+  resultBox.scrollTop = resultBox.scrollHeight;
+
+  // Step 2: After a short delay, show as final result
+  setTimeout(() => {
+    // Remove interim row
+    const interimRow = document.getElementById('simInterimRow');
+    if (interimRow) interimRow.remove();
+
+    state.roundCount++;
+    document.getElementById('recRound').textContent = state.roundCount;
+
+    // Accumulate previous final results
+    const existingFinals = resultBox.querySelectorAll('.final-row');
+    let accumHtml = '';
+    existingFinals.forEach((el) => { accumHtml += el.outerHTML; });
+    accumHtml += '<div class="final-row"><span class="status-tag done">最终</span> <span class="final">' + esc(text) + '</span></div>';
+    resultBox.innerHTML = accumHtml;
+    resultBox.scrollTop = resultBox.scrollHeight;
+
+    document.getElementById('recStatus').textContent = '识别结束';
+    document.getElementById('recStatus').className = 'status-tag done';
+
+    addLog('识别最终结果: "' + text + '"', 'success');
+
+    // Re-enable send for next round
+    if (state.isRecognizing && state.simMode) {
+      setTimeout(() => {
+        document.getElementById('btnSimSend').disabled = false;
+        document.getElementById('simText').focus();
+        document.getElementById('recStatus').textContent = '模拟模式 - 输入文本后发送';
+        document.getElementById('recStatus').className = 'status-tag recognizing';
+      }, 300);
+    }
+  }, 600);
 }
 
 /* ===================================================================

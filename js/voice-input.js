@@ -12,9 +12,10 @@ const VoiceInput = {
   /**
    * 创建语音识别实例
    * @param {Object} callbacks - { onSpeechStart, onResult(text), onInterimResult(text), onError(type, msg), onStateChange(state) }
+   * @param {number} [debounceMs=0] - 识别结果累积缓冲时间（毫秒）。>0 时长句分片会在指定时间内合并为一条 onResult
    * @returns {Object} { start(), stop(), state }
    */
-  create(callbacks) {
+  create(callbacks, debounceMs) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       callbacks.onError('not-available', '浏览器不支持语音识别');
@@ -25,6 +26,8 @@ const VoiceInput = {
     let _state = 'stopped'; // stopped | listening
     let _shouldRestart = false;
     let _restartFailCount = 0;
+    let _buffer = '';
+    let _bufferTimer = null;
 
     function _createRecognition() {
       const rec = new SR();
@@ -59,7 +62,19 @@ const VoiceInput = {
           callbacks.onInterimResult(latestInterim);
         }
         if (finalText) {
-          callbacks.onResult(finalText);
+          if (debounceMs > 0) {
+            // 累积缓冲：合并短时间内连续返回的结果，避免长句停顿被拆成多条
+            _buffer += finalText;
+            if (_bufferTimer) clearTimeout(_bufferTimer);
+            _bufferTimer = setTimeout(() => {
+              if (_buffer) {
+                callbacks.onResult(_buffer);
+                _buffer = '';
+              }
+            }, debounceMs);
+          } else {
+            callbacks.onResult(finalText);
+          }
         }
       };
 
@@ -128,6 +143,12 @@ const VoiceInput = {
         if (recognition) {
           try { recognition.abort(); } catch (_) { /* 静默 */ }
           recognition = null;
+        }
+        // 停止时刷新缓冲
+        if (_bufferTimer) { clearTimeout(_bufferTimer); _bufferTimer = null; }
+        if (_buffer) {
+          callbacks.onResult(_buffer);
+          _buffer = '';
         }
         _state = 'stopped';
         callbacks.onStateChange(_state);
