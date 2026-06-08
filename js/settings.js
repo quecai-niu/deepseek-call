@@ -9,6 +9,7 @@ const STORE_KEYS = {
   effort: 'ds_effort',
   thinking: 'ds_thinking',
   messages: 'ds_messages',
+  flashDefault: 'ds_flash_default_v1',
   ttsRate: 'ds_tts_rate',
   tavilyKey: 'ds_tavily_key',
   webSearch: 'ds_web_search'
@@ -25,7 +26,16 @@ const SettingsStore = {
     try { localStorage.setItem(STORE_KEYS.apiKey, val); } catch (_) { /* 静默失败 */ }
   },
   getModel() {
-    try { return localStorage.getItem(STORE_KEYS.model) || 'deepseek-v4-pro'; } catch (_) { return 'deepseek-v4-pro'; }
+    try {
+      const saved = localStorage.getItem(STORE_KEYS.model);
+      const migrated = localStorage.getItem(STORE_KEYS.flashDefault);
+      if (!migrated && (!saved || saved === 'deepseek-v4-pro')) {
+        localStorage.setItem(STORE_KEYS.model, 'deepseek-v4-flash');
+        localStorage.setItem(STORE_KEYS.flashDefault, 'true');
+        return 'deepseek-v4-flash';
+      }
+      return saved || 'deepseek-v4-flash';
+    } catch (_) { return 'deepseek-v4-flash'; }
   },
   setModel(val) {
     try { localStorage.setItem(STORE_KEYS.model, val); } catch (_) { /* 静默失败 */ }
@@ -38,10 +48,12 @@ const SettingsStore = {
   },
   getThinking() {
     try {
+      const model = this.getModel();
+      if (!this.THINKING_MODELS.includes(model)) return false;
       const val = localStorage.getItem(STORE_KEYS.thinking);
       if (val !== null) return val === 'true';
       // 无记录时根据模型决定默认值
-      return this.THINKING_MODELS.includes(this.getModel());
+      return true;
     } catch (_) { return true; }
   },
   setThinking(val) {

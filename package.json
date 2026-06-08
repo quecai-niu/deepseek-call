@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "test": "node test-automation.mjs"
+  },
   "devDependencies": {
     "playwright": "^1.60.0"
   }

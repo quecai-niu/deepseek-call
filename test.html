@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>语音功能综合测试</title>
+<script src="js/voice-input.js"></script>
 <style>
   /* ===== CSS 变量 ===== */
   :root {
@@ -550,6 +551,13 @@
           <label for="autoScenario" style="font-weight:500;min-width:60px;">测试场景</label>
           <select id="autoScenario"></select>
         </div>
+        <div class="auto-test-row" style="flex-direction:column;align-items:stretch;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="useVoiceInput" checked>
+            <label for="useVoiceInput">使用 VoiceInput 管线</label>
+          </div>
+          <div style="font-size:0.78rem;color:var(--text-secondary);margin-left:24px;">通过 VoiceInput 封装层测试 debounce 合并逻辑</div>
+        </div>
         <div class="auto-test-progress" id="autoProgress">
           <span class="step" data-step="ready">就绪</span>
           <span style="color:var(--text-secondary)">→</span>
@@ -598,6 +606,7 @@ const state = {
   autoRecognition: null,
   autoAudio: null,
   autoRunning: false,
+  autoVoiceInput: null,
 };
 
 /* ===================================================================
@@ -1268,61 +1277,99 @@ async function runAutoTest() {
     addLog('音频加载完成: ' + scenario.file, 'success');
 
     setAutoStep('recognizing');
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SR();
-    state.autoRecognition = recognition;
-    recognition.lang = 'zh-CN';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 3;
 
     const stream = audio.captureStream();
     const track = stream.getAudioTracks()[0];
     if (!track) throw new Error('无法获取音频轨道');
-
     addLog('音频轨道获取成功，启动识别...', 'info');
 
+    const useVI = document.getElementById('useVoiceInput').checked;
+    const modeLabel = useVI ? 'VoiceInput 管线' : '原始 SpeechRecognition';
+
     const result = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('识别超时 (' + (scenario.duration + 5) + 's)')), (scenario.duration + 5) * 1000);
-      let finalText = '';
+      if (useVI) {
+        /* ========== VoiceInput 管线路径 ========== */
+        let finalText = '';
+        const callbacks = {
+          onResult(text) { finalText += text; },
+          onInterimResult() {},
+          onError(type, msg) { addLog('VoiceInput 错误: ' + type + ' - ' + msg, 'error'); },
+          onStateChange(state) { addLog('VoiceInput 状态: ' + state, 'info'); },
+          onSpeechStart() {}
+        };
+        const vi = VoiceInput.create(callbacks, 1500, track);
+        if (!vi) return reject(new Error('VoiceInput.create 返回 null'));
+        state.autoVoiceInput = vi;
+        vi.start();
+        addLog('VoiceInput 已启动，debounce=1500ms', 'info');
 
-      recognition.onresult = (event) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalText += event.results[i][0].transcript;
+        const timeoutMs = (scenario.duration + 6) * 1000;
+        const timeout = setTimeout(() => {
+          vi.stop();
+          if (finalText.trim()) {
+            resolve(finalText.trim());
+          } else {
+            reject(new Error('VoiceInput 识别结束但无结果'));
           }
+        }, timeoutMs);
+
+        audio.play().catch(err => {
+          clearTimeout(timeout);
+          vi.stop();
+          reject(new Error('音频播放失败: ' + err.message));
+        });
+
+      } else {
+        /* ========== 原始 SpeechRecognition 路径 ========== */
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SR();
+        state.autoRecognition = recognition;
+        recognition.lang = 'zh-CN';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 3;
+
+        const timeout = setTimeout(() => reject(new Error('识别超时 (' + (scenario.duration + 5) + 's)')), (scenario.duration + 5) * 1000);
+        let finalText = '';
+
+        recognition.onresult = (event) => {
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              finalText += event.results[i][0].transcript;
+            }
+          }
+        };
+
+        recognition.onerror = (event) => {
+          clearTimeout(timeout);
+          reject(new Error('识别错误: ' + event.error));
+        };
+
+        recognition.onend = () => {
+          clearTimeout(timeout);
+          if (finalText) {
+            resolve(finalText.trim());
+          } else {
+            reject(new Error('识别结束但无结果'));
+          }
+        };
+
+        try {
+          recognition.start(track);
+        } catch (err) {
+          clearTimeout(timeout);
+          reject(new Error('recognition.start(track) 失败: ' + err.message + '（需要 Chrome 133+）'));
         }
-      };
 
-      recognition.onerror = (event) => {
-        clearTimeout(timeout);
-        reject(new Error('识别错误: ' + event.error));
-      };
-
-      recognition.onend = () => {
-        clearTimeout(timeout);
-        if (finalText) {
-          resolve(finalText.trim());
-        } else {
-          reject(new Error('识别结束但无结果'));
-        }
-      };
-
-      try {
-        recognition.start(track);
-      } catch (err) {
-        clearTimeout(timeout);
-        reject(new Error('recognition.start(track) 失败: ' + err.message + '（需要 Chrome 133+）'));
+        audio.play().catch(err => {
+          clearTimeout(timeout);
+          reject(new Error('音频播放失败: ' + err.message));
+        });
       }
-
-      audio.play().catch(err => {
-        clearTimeout(timeout);
-        reject(new Error('音频播放失败: ' + err.message));
-      });
     });
 
     markAutoStepDone('recognizing');
-    addLog('识别结果: "' + result + '"', 'success');
+    addLog('[' + modeLabel + '] 识别结果: "' + result + '"', 'success');
 
     setAutoStep('comparing');
     const expected = scenario.expected;
@@ -1338,18 +1385,18 @@ async function runAutoTest() {
 
     if (isPass) {
       showAutoResult('pass',
-        '<span class="label">✓ PASS</span> 识别结果与预期匹配' +
+        '<span class="label">✓ PASS</span> [' + modeLabel + '] 识别结果与预期匹配' +
         '<div style="margin-top:6px;">预期: ' + esc(expected) + '</div>' +
         '<div>实际: ' + esc(result) + '</div>'
       );
-      addLog('✓ 测试通过: 预期="' + expected + '" 实际="' + result + '"', 'success');
+      addLog('✓ [' + modeLabel + '] 测试通过: 预期="' + expected + '" 实际="' + result + '"', 'success');
     } else {
       showAutoResult('fail',
-        '<span class="label">✗ FAIL</span> 识别结果不匹配' +
+        '<span class="label">✗ FAIL</span> [' + modeLabel + '] 识别结果不匹配' +
         '<div style="margin-top:6px;">预期: ' + esc(expected) + '</div>' +
         '<div>实际: <span class="diff">' + esc(result) + '</span></div>'
       );
-      addLog('✗ 测试失败: 预期="' + expected + '" 实际="' + result + '"', 'error');
+      addLog('✗ [' + modeLabel + '] 测试失败: 预期="' + expected + '" 实际="' + result + '"', 'error');
     }
 
   } catch (err) {
@@ -1364,6 +1411,7 @@ async function runAutoTest() {
       state.autoAudio = null;
     }
     state.autoRecognition = null;
+    state.autoVoiceInput = null;
   }
 }
 
@@ -1371,6 +1419,10 @@ function stopAutoTest() {
   if (state.autoRecognition) {
     try { state.autoRecognition.abort(); } catch (_) {}
     state.autoRecognition = null;
+  }
+  if (state.autoVoiceInput) {
+    try { state.autoVoiceInput.stop(); } catch (_) {}
+    state.autoVoiceInput = null;
   }
   if (state.autoAudio) {
     try { state.autoAudio.pause(); state.autoAudio.src = ''; } catch (_) {}

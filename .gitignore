@@ -10,6 +10,7 @@ desktop.ini
 
 # Claude / Agent 内部文件
 .claude/
+.playwright-mcp/
 .agents/hook-heartbeat.txt
 .agents/subagent-logs/
 
@@ -18,3 +19,6 @@ handoff-*.md
 
 # 依赖
 node_modules/
+
+# 测试输出
+test_output.txt

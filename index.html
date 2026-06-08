@@ -8,44 +8,63 @@
 </head>
 <body>
 
-<!-- ==================== Top Toolbar ==================== -->
-<div class="toolbar">
-  <span class="toolbar-title">DeepSeek Chat</span>
-  <div class="toolbar-actions">
-    <button class="toolbar-btn" id="btnClear" title="清空对话">&#128465;</button>
-    <button class="toolbar-btn" id="btnCall" title="语音通话">&#128222;</button>
-    <button class="toolbar-btn" id="btnDiagnose" title="诊断工具">&#128300;</button>
-    <button class="toolbar-btn" id="btnTest" title="综合测试">🧪</button>
-    <button class="toolbar-btn" id="btnSettings" title="设置">&#9881;</button>
-  </div>
-</div>
+<div class="app-shell">
+  <!-- ==================== Conversations ==================== -->
+  <aside class="conversation-sidebar" aria-label="对话列表">
+    <div class="sidebar-header">
+      <span class="sidebar-title">对话</span>
+      <button class="icon-btn" id="btnNewConversation" title="新对话">+</button>
+    </div>
+    <div class="auth-strip">
+      <span class="auth-state" id="authStateText">未登录</span>
+      <button class="text-btn" id="btnLogout" style="display:none">退出</button>
+    </div>
+    <div class="conversation-list" id="conversationList">
+      <div class="conversation-empty">登录后显示历史对话</div>
+    </div>
+  </aside>
 
-<!-- ==================== Messages ==================== -->
-<div class="messages" id="messages">
-  <div class="empty-state" id="emptyState">
-    <div class="empty-state-icon">&#128172;</div>
-    <div>开始和 DeepSeek 对话吧</div>
-  </div>
-</div>
+  <main class="chat-pane">
+    <!-- ==================== Top Toolbar ==================== -->
+    <div class="toolbar">
+      <span class="toolbar-title" id="activeTitle">DeepSeek Chat</span>
+      <div class="toolbar-actions">
+        <button class="toolbar-btn" id="btnClear" title="开始新对话">&#128196;</button>
+        <button class="toolbar-btn" id="btnCall" title="语音通话">&#128222;</button>
+        <button class="toolbar-btn" id="btnDiagnose" title="诊断工具">&#128300;</button>
+        <button class="toolbar-btn" id="btnTest" title="综合测试">🧪</button>
+        <button class="toolbar-btn" id="btnSettings" title="设置">&#9881;</button>
+      </div>
+    </div>
 
-<!-- ==================== Voice Status ==================== -->
-<div class="voice-status" id="voiceStatus" style="display:none">
-  <span class="voice-status-icon" id="voiceStatusIcon">&#127908;</span>
-  <span class="voice-status-text" id="voiceStatusText"></span>
-</div>
+    <!-- ==================== Messages ==================== -->
+    <div class="messages" id="messages">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">&#128172;</div>
+        <div>登录后开始和 DeepSeek 对话吧</div>
+      </div>
+    </div>
 
-<!-- ==================== Input Area ==================== -->
-<div class="input-area">
-  <div class="model-switcher">
-    <button class="model-tag" data-model="deepseek-v4-flash">快</button>
-    <button class="model-tag active" data-model="deepseek-v4-pro">思考</button>
-    <button class="model-tag" data-model="deepseek-chat">旧V3</button>
-    <button class="model-tag" data-model="deepseek-reasoner">旧R1</button>
-  </div>
-  <div class="input-row">
-    <textarea id="inputBox" rows="1" placeholder="输入消息..."></textarea>
-    <button class="send-btn" id="btnSend" disabled>&#9654;</button>
-  </div>
+    <!-- ==================== Voice Status ==================== -->
+    <div class="voice-status" id="voiceStatus" style="display:none">
+      <span class="voice-status-icon" id="voiceStatusIcon">&#127908;</span>
+      <span class="voice-status-text" id="voiceStatusText"></span>
+    </div>
+
+    <!-- ==================== Input Area ==================== -->
+    <div class="input-area">
+      <div class="model-switcher">
+        <button class="model-tag active" data-model="deepseek-v4-flash">快</button>
+        <button class="model-tag" data-model="deepseek-v4-pro">思考</button>
+        <button class="model-tag" data-model="deepseek-chat">旧V3</button>
+        <button class="model-tag" data-model="deepseek-reasoner">旧R1</button>
+      </div>
+      <div class="input-row">
+        <textarea id="inputBox" rows="1" placeholder="请先登录..."></textarea>
+        <button class="send-btn" id="btnSend" disabled>&#9654;</button>
+      </div>
+    </div>
+  </main>
 </div>
 
 <!-- ==================== Settings Overlay ==================== -->
@@ -56,13 +75,23 @@
       <button class="close-btn" id="btnCloseSettings">&times;</button>
     </div>
 
+    <div class="settings-body">
     <div class="form-group">
-      <label>API Key</label>
-      <div class="key-input-row">
-        <input type="password" id="apiKeyInput" placeholder="sk-...">
-        <button class="toggle-vis-btn" id="btnToggleVis" title="显示/隐藏">&#128065;</button>
+      <label>账户</label>
+      <input type="email" id="authEmailInput" placeholder="email@example.com" autocomplete="email">
+      <input type="password" id="authPasswordInput" placeholder="密码" autocomplete="current-password">
+      <div class="auth-actions">
+        <button class="save-btn compact" id="btnSignIn">登录</button>
+        <button class="secondary-btn" id="btnSignUp">注册</button>
+        <button class="danger-btn compact" id="btnSignOut" style="display:none">退出登录</button>
       </div>
-      <div class="hint">密钥仅保存在本地浏览器中</div>
+      <div class="hint" id="authMessage">Supabase Auth 登录后会保存并恢复你的历史对话</div>
+    </div>
+
+    <div class="form-group">
+      <label>后端配置</label>
+      <div class="config-status" id="backendConfigStatus">正在检测...</div>
+      <div class="hint">DeepSeek Key 和 Supabase service role 只保存在后端环境变量中</div>
     </div>
 
     <div class="form-group">
@@ -89,18 +118,11 @@
     <div class="form-group">
       <label>联网搜索</label>
       <div class="toggle-row">
-        <span class="toggle-label">开启后模型可通过 Tavily 搜索互联网获取实时信息</span>
+        <span class="toggle-label">开启后由后端 Tavily 配置执行搜索</span>
         <label class="toggle-switch">
           <input type="checkbox" id="webSearchToggle">
           <span class="toggle-slider"></span>
         </label>
-      </div>
-      <div id="tavilyKeyGroup" style="display:none; margin-top:8px;">
-        <div class="key-input-row">
-          <input type="password" id="tavilyKeyInput" placeholder="tvly-...">
-          <button class="toggle-vis-btn" id="btnToggleTavilyVis" title="显示/隐藏">&#128065;</button>
-        </div>
-        <div class="hint">需要 Tavily API Key，可在 <a href="https://app.tavily.com" target="_blank" rel="noopener">app.tavily.com</a> 免费获取</div>
       </div>
     </div>
 
@@ -110,16 +132,22 @@
     </div>
 
     <div class="form-group">
-      <label>请求体 JSON 预览</label>
+      <label>后端请求 JSON 预览</label>
       <textarea class="json-preview" id="jsonPreview" readonly></textarea>
     </div>
+    </div>
 
-    <button class="danger-btn" id="btnClearConv">清空对话</button>
-    <button class="save-btn" id="btnSaveSettings">保存设置</button>
+    <div class="settings-footer">
+      <button class="danger-btn" id="btnClearConv">开始新对话</button>
+      <button class="save-btn" id="btnSaveSettings">保存设置</button>
+    </div>
   </div>
 </div>
 
+<script defer src="/config.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script defer src="js/settings.js"></script>
+<script defer src="js/auth.js"></script>
 <script defer src="js/chat-ui.js"></script>
 <script defer src="js/voice-input.js"></script>
 <script defer src="js/voice-output.js"></script>

@@ -1,43 +1,85 @@
 'use strict';
 
 /* ================================================================
- *  DeepSeekAPI —— API 调用 + SSE 解析 + 联网搜索
+ *  Backend APIs —— conversations + streaming chat
  * ================================================================ */
+const ConversationAPI = {
+  async listConversations() {
+    const data = await this._request('/api/conversations');
+    return data.conversations || [];
+  },
 
-/** 联网搜索工具定义（DeepSeek Function Calling） */
-const WEB_SEARCH_TOOL = {
-  type: 'function',
-  function: {
-    name: 'web_search',
-    description: '搜索互联网获取实时信息。当用户询问时事、新闻、天气、股票、最新动态等需要实时数据的问题时使用。',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: '搜索关键词，尽量使用中文'
-        }
-      },
-      required: ['query']
+  async createConversation(title) {
+    const data = await this._request('/api/conversations', {
+      method: 'POST',
+      body: { title }
+    });
+    return data.conversation;
+  },
+
+  async getMessages(conversationId) {
+    return this._request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`);
+  },
+
+  async updateConversation(conversationId, patch) {
+    const data = await this._request(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+      method: 'PATCH',
+      body: patch
+    });
+    return data.conversation;
+  },
+
+  async health() {
+    return this._request('/api/health', { auth: false });
+  },
+
+  async _request(path, options = {}) {
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+
+    if (options.auth !== false) {
+      const token = await AuthService.getAccessToken();
+      if (!token) throw new Error('请先登录。');
+      headers.Authorization = `Bearer ${token}`;
     }
+
+    const response = await fetch(path, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+
+    let data = {};
+    try {
+      data = await response.json();
+    } catch (_) {
+      data = {};
+    }
+
+    if (!response.ok) {
+      const err = new Error(data.message || `请求失败 (${response.status})`);
+      err.code = data.error || 'api_error';
+      throw err;
+    }
+
+    return data;
   }
 };
 
 const DeepSeekAPI = {
-  /** 当前 AbortController，用于取消请求 */
   _controller: null,
-  /** 是否正在请求中 */
   _streaming: false,
 
   /**
-   * 发送消息
-   * @param {Array} messages - [{role, content}, ...]
-   * @param {Object} callbacks - { onReasoning, onContent, onDone, onError, onSearchStart, onSearchProgress, onSearchEnd }
+   * Send one user message through the backend chat API.
+   * @param {Object} payload - { conversationId, content, model, thinking, effort, webSearch }
+   * @param {Object} callbacks
    */
-  async send(messages, callbacks) {
-    const apiKey = SettingsStore.getApiKey();
-    if (!apiKey) {
-      callbacks.onError('missing_key');
+  async send(payload, callbacks) {
+    const token = await AuthService.getAccessToken();
+    if (!token) {
+      callbacks.onError?.('unauthorized', '请先登录后再发送消息。');
       return;
     }
 
@@ -45,153 +87,46 @@ const DeepSeekAPI = {
     this._streaming = true;
 
     try {
-      const webSearchEnabled = SettingsStore.getWebSearch() && !!SettingsStore.getTavilyKey();
-
-      if (webSearchEnabled) {
-        const handled = await this._tryWebSearch(messages, callbacks);
-        if (handled) return;
-      }
-
-      // 不走联网搜索，直接 stream
-      await this._streamResponse(messages, callbacks);
-    } catch (err) {
-      this._streaming = false;
-      if (err.name === 'AbortError') {
-        callbacks.onDone();
-        return;
-      }
-      callbacks.onError('network', '网络连接失败，请检查网络后重试。');
-    }
-  },
-
-  /**
-   * 尝试联网搜索流程（非 stream 判断 + 工具调用）
-   * @returns {boolean} 是否已处理完成（true 表示已产生回答）
-   */
-  async _tryWebSearch(messages, callbacks) {
-    callbacks.onSearchStart?.();
-
-    // Step 1: 非 stream 请求 + tools
-    const requestBody = this._buildRequestBody(messages, {
-      tools: [WEB_SEARCH_TOOL],
-      tool_choice: 'auto',
-      stream: false
-    });
-
-    let data;
-    try {
-      const resp = await fetch('https://api.deepseek.com/chat/completions', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + SettingsStore.getApiKey(),
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(payload),
         signal: this._controller.signal
       });
 
-      if (!resp.ok) {
-        // 工具调用失败，回退到普通 stream
-        callbacks.onSearchEnd?.();
-        return false;
+      if (!response.ok) {
+        this._streaming = false;
+        const data = await safeJson(response);
+        callbacks.onError?.(data.error || 'api_error', data.message || `请求失败 (${response.status})`);
+        return;
       }
 
-      data = await resp.json();
+      await this._readSse(response, callbacks);
     } catch (err) {
-      if (err.name === 'AbortError') throw err;
-      // 网络异常，清理搜索状态后回退到普通 stream
-      callbacks.onSearchEnd?.();
-      return false;
-    }
-    const choice = data?.choices?.[0];
-    const message = choice?.message;
-    const toolCalls = message?.tool_calls;
-
-    if (!toolCalls || toolCalls.length === 0) {
-      // 模型认为不需要搜索，直接输出回答
-      callbacks.onSearchEnd?.();
-      if (message?.content) {
-        callbacks.onContent(message.content);
-        callbacks.onDone();
-        return true;
+      this._streaming = false;
+      if (err.name === 'AbortError') {
+        callbacks.onDone?.({ cancelled: true });
+        return;
       }
-      return false;
+      callbacks.onError?.('network', '网络连接失败，请检查后重试。');
     }
-
-    // Step 2: 构造 assistant 消息（含 tool_calls）
-    const assistantMsg = {
-      role: 'assistant',
-      content: message?.content || '',
-      tool_calls: toolCalls.map(tc => ({
-        id: tc.id,
-        type: tc.type,
-        function: { name: tc.function.name, arguments: tc.function.arguments }
-      }))
-    };
-
-    // Step 3: 执行搜索
-    const toolResults = [];
-    for (const tc of toolCalls) {
-      try {
-        const args = JSON.parse(tc.function.arguments);
-        const query = args.query || '';
-        callbacks.onSearchProgress?.(query);
-        const result = await this._tavilySearch(query);
-        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: result });
-      } catch (err) {
-        if (err.name === 'AbortError') throw err;
-        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: '搜索执行失败' });
-      }
-    }
-
-    // Step 4: 带搜索结果重新请求（stream）
-    callbacks.onSearchEnd?.();
-    const enriched = [...messages, assistantMsg, ...toolResults];
-    await this._streamResponse(enriched, callbacks);
-    return true;
   },
 
-  /**
-   * 流式请求 DeepSeek 并解析 SSE
-   * @param {Array} messages - 完整消息列表（含 tool 消息时已组装好）
-   * @param {Object} callbacks
-   */
-  async _streamResponse(messages, callbacks) {
-    const requestBody = this._buildRequestBody(messages, { stream: true });
-
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SettingsStore.getApiKey()}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody),
-      signal: this._controller.signal
-    });
-
-    if (!response.ok) {
+  cancel() {
+    if (this._controller && this._streaming) {
+      this._controller.abort();
       this._streaming = false;
-      let errMsg = '';
-      if (response.status === 401) {
-        errMsg = 'API Key 无效，请检查设置。';
-      } else if (response.status === 429) {
-        errMsg = '请求过于频繁，请稍后再试。';
-      } else if (response.status === 402) {
-        errMsg = '账户余额不足，请充值。';
-      } else if (response.status >= 500) {
-        errMsg = 'DeepSeek 服务器错误，请稍后再试。';
-      } else {
-        try {
-          const errBody = await response.json();
-          errMsg = errBody?.error?.message || `请求失败 (${response.status})`;
-        } catch (_) {
-          errMsg = `请求失败 (${response.status})`;
-        }
-      }
-      callbacks.onError('api_error', errMsg);
-      return;
     }
+  },
 
+  isStreaming() {
+    return this._streaming;
+  },
+
+  async _readSse(response, callbacks) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
@@ -201,115 +136,71 @@ const DeepSeekAPI = {
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop() || '';
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-
-        const dataStr = trimmed.slice(5).trim();
-        if (dataStr === '[DONE]') {
-          this._streaming = false;
-          callbacks.onDone();
-          return;
-        }
-
-        try {
-          const json = JSON.parse(dataStr);
-          const delta = json?.choices?.[0]?.delta;
-          if (!delta) continue;
-
-          if (delta.reasoning_content) {
-            callbacks.onReasoning(delta.reasoning_content);
-          }
-
-          if (delta.content) {
-            callbacks.onContent(delta.content);
-          }
-        } catch (_) {
-          // SSE 解析错误 —— 静默跳过
-        }
+      for (const chunk of chunks) {
+        this._handleSseChunk(chunk, callbacks);
       }
-
-      await new Promise(r => setTimeout(r, 0));
     }
 
+    if (buffer.trim()) this._handleSseChunk(buffer, callbacks);
     this._streaming = false;
-    callbacks.onDone();
   },
 
-  /** 调用 Tavily 搜索 API */
-  async _tavilySearch(query) {
-    const apiKey = SettingsStore.getTavilyKey();
+  _handleSseChunk(chunk, callbacks) {
+    let event = 'message';
+    const dataLines = [];
+
+    for (const line of chunk.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+    }
+
+    let data = {};
     try {
-      const resp = await fetch('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          api_key: apiKey,
-          query: query,
-          search_depth: 'basic',
-          max_results: 5
-        }),
-        signal: this._controller?.signal
-      });
-      if (!resp.ok) return `搜索失败 (${resp.status})`;
-      const data = await resp.json();
-      return (data.results || []).map(r => `- ${r.title}: ${r.content} (${r.url})`).join('\n') || '未找到相关结果';
-    } catch (err) {
-      if (err.name === 'AbortError') throw err;
-      return `搜索异常: ${err.message}`;
-    }
-  },
-
-  /**
-   * 构建请求体
-   * @param {Array} messages - 消息列表（不含 system prompt）
-   * @param {Object} extra - 额外字段（tools, tool_choice, stream 等）
-   */
-  _buildRequestBody(messages, extra = {}) {
-    const model = SettingsStore.getModel();
-    const body = {
-      model: model,
-      messages: [
-        { role: 'system', content: SettingsStore.buildSystemPrompt() },
-        ...messages
-      ],
-      stream: extra.stream !== false,
-      ...extra
-    };
-
-    // 思考模式
-    const thinking = SettingsStore.getThinking();
-    if (thinking) {
-      body.thinking = { type: 'enabled' };
-      if (extra.stream !== false) {
-        body.reasoning_effort = SettingsStore.getEffort();
-      }
-    } else {
-      body.thinking = { type: 'disabled' };
+      data = dataLines.length ? JSON.parse(dataLines.join('\n')) : {};
+    } catch (_) {
+      data = {};
     }
 
-    // 非 stream 请求删除 stream 字段
-    if (extra.stream === false) {
-      delete body.stream;
+    switch (event) {
+      case 'conversation':
+        callbacks.onConversation?.(data);
+        break;
+      case 'search_start':
+        callbacks.onSearchStart?.();
+        break;
+      case 'search_progress':
+        callbacks.onSearchProgress?.(data.query || '');
+        break;
+      case 'search_end':
+        callbacks.onSearchEnd?.();
+        break;
+      case 'reasoning':
+        callbacks.onReasoning?.(data.chunk || '');
+        break;
+      case 'content':
+        callbacks.onContent?.(data.chunk || '');
+        break;
+      case 'done':
+        this._streaming = false;
+        callbacks.onDone?.(data);
+        break;
+      case 'error':
+        this._streaming = false;
+        callbacks.onError?.(data.error || 'api_error', data.message || '请求失败，请稍后再试。');
+        break;
+      default:
+        break;
     }
-
-    return body;
-  },
-
-  /** 取消当前请求 */
-  cancel() {
-    if (this._controller && this._streaming) {
-      this._controller.abort();
-      this._streaming = false;
-    }
-  },
-
-  /** 是否正在流式输出中 */
-  isStreaming() {
-    return this._streaming;
   }
 };
+
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch (_) {
+    return {};
+  }
+}

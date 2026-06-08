@@ -14,9 +14,10 @@ const VoiceInput = {
    * @param {Object} callbacks - { onSpeechStart, onResult(text), onInterimResult(text), onError(type, msg), onStateChange(state) }
    * @param {number} [debounceMs=0] - 识别结果累积缓冲时间（毫秒）。>0 时长句分片会在指定时间内合并为一条 onResult。
    *                                    内置 maxWait = max(debounceMs * 3, 2000)，防止无限缓冲。
+   * @param {MediaStreamTrack} [audioTrack] - 可选的外部音频源 MediaStreamTrack，传入后录制该音频源而非麦克风。
    * @returns {Object} { start(), stop(), state }
    */
-  create(callbacks, debounceMs) {
+  create(callbacks, debounceMs, audioTrack) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       callbacks.onError('not-available', '浏览器不支持语音识别');
@@ -30,6 +31,7 @@ const VoiceInput = {
     let _buffer = '';
     let _bufferTimer = null;
     let _maxWaitTimer = null;
+    let _audioTrack = audioTrack;
 
     function _createRecognition() {
       const rec = new SR();
@@ -99,7 +101,7 @@ const VoiceInput = {
           // 立即重启，消除间隙
           try {
             recognition = _createRecognition();
-            recognition.start();
+            _audioTrack ? recognition.start(_audioTrack) : recognition.start();
             _restartFailCount = 0;
           } catch (_) {
             _restartFailCount++;
@@ -110,7 +112,7 @@ const VoiceInput = {
             } else {
               // 等 200ms 后重试
               setTimeout(() => { if (_shouldRestart && _state === 'listening') {
-                try { recognition = _createRecognition(); recognition.start(); _restartFailCount = 0; } catch (_) {}
+                try { recognition = _createRecognition(); _audioTrack ? recognition.start(_audioTrack) : recognition.start(); _restartFailCount = 0; } catch (_) {}
               } }, 200);
             }
           }
@@ -146,7 +148,7 @@ const VoiceInput = {
         _restartFailCount = 0;
         try {
           recognition = _createRecognition();
-          recognition.start();
+          _audioTrack ? recognition.start(_audioTrack) : recognition.start();
           _state = 'listening';
           callbacks.onStateChange(_state);
         } catch (err) {
